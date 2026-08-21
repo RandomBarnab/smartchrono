@@ -65,7 +65,8 @@
                     OBJECTIF 
                     <input type="number" id="goalInput" min="1" max="24" value="7" style="width: 32px; background: #2a2a2a; border: 1px solid #444; color: white; border-radius: 4px; text-align: center; padding: 1px; font-size: 10px;" onchange="updateGoal(this.value)">H
                 </div>
-                <div id="dayTotal">00:00:00</div>
+                <div id="dayTotal" style="font-size: 18px; font-weight: bold; margin-top: 2px;">00:00:00</div>
+                <div id="estimatedEnd" style="font-size: 10px; color: var(--muted); margin-top: 2px; font-style: italic;">Fin estimée : --:--</div>
             </div>
             <div id="timer">00:00:00</div>
         </div>
@@ -173,6 +174,28 @@
         const goalSeconds = dailyGoalHours * 3600;
         document.getElementById('percText').textContent = Math.min((totalSec / goalSeconds) * 100, 100).toFixed(1) + "%";
         
+        // Calcul et affichage de l'heure de fin estimée
+        const remainingSec = Math.max(0, goalSeconds - totalSec);
+        const estEndEl = document.getElementById('estimatedEnd');
+        
+        if (remainingSec <= 0) {
+            estEndEl.textContent = "Objectif atteint !";
+        } else {
+            const now = new Date();
+            let estimatedEndTime = new Date(now.getTime() + remainingSec * 1000);
+            
+            // Logique de pause déjeuner (1 heure ajoutée si on commence avant 12:30 et qu'on termine après 12:30)
+            const lunchLimit = new Date(now);
+            lunchLimit.setHours(12, 30, 0, 0);
+            
+            if (now < lunchLimit && estimatedEndTime > lunchLimit) {
+                estimatedEndTime = new Date(estimatedEndTime.getTime() + 3600 * 1000); // Ajoute 1h (3600s)
+            }
+            
+            const timeStr = estimatedEndTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            estEndEl.textContent = `Fin estimée : ${timeStr}`;
+        }
+
         const bar = document.getElementById('progressBar');
         bar.innerHTML = '';
         [1,2,3,4].forEach(p => {
@@ -307,7 +330,7 @@
             const daysInMonth = new Date(year, month + 1, 0).getDate();
             
             // Espaces vides pour l'offset du début de mois
-            for (let x = 0; i = x < startingOffset; x++) {
+            for (let x = 0; x < startingOffset; x++) {
                 grid.innerHTML += `<div style="height:32px;"></div>`;
             }
             
@@ -318,7 +341,7 @@
                 const daySess = sessions.filter(s => new Date(s.date).toDateString() === dayDate.toDateString());
                 
                 let gradientStr = 'var(--rem)';
-                const totalWorked = daySess.reduce((a,s)=>a+s.duration, 0);
+                const totalWorked = daySess.reduce((acc, s)=>acc+s.duration, 0);
 
                 if (totalWorked > 0) {
                     let acc = 0;
