@@ -40,7 +40,7 @@
         .nav-tabs { display: flex; gap: 5px; margin-bottom: 10px; }
         .nav-btn { flex: 1; padding: 6px; font-size: 10px; background: #333; color: white; border: none; border-radius: 4px; cursor: pointer; }
         .nav-btn.active { background: var(--p4); }
-        .stats-scroll { max-height: 190px; overflow-y: auto; padding-right: 5px; margin-top: 10px; }
+        .stats-scroll { max-height: 220px; overflow-y: auto; padding-right: 5px; margin-top: 10px; }
         
         /* Calendrier adaptatif */
         .calendar-header { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; text-align: center; font-size: 9px; color: var(--muted); margin-bottom: 4px; }
@@ -95,10 +95,18 @@
             <button id="tab-week" class="nav-btn" onclick="changeView('week')">Semaine</button>
             <button id="tab-month" class="nav-btn" onclick="changeView('month')">Mois</button>
         </div>
-        <input type="date" id="dateSelector" onchange="renderCharts()" style="width:100%; margin-bottom:10px; background:#333; color:white; border:none; padding:5px; border-radius:4px; font-size:11px;">
+        
+        <div style="display: flex; gap: 10px; align-items: center; margin-bottom: 10px;">
+            <input type="date" id="dateSelector" onchange="renderCharts()" style="flex: 1; background:#333; color:white; border:none; padding:5px; border-radius:4px; font-size:11px;">
+            <div id="startHourContainer" style="font-size:9px; color:var(--muted); white-space:nowrap;">
+                Début : <input type="number" id="startHourInput" min="0" max="23" value="9" style="width:25px; background:#2a2a2a; border:1px solid #444; color:white; border-radius:4px; text-align:center; padding:1px; font-size:9px;" onchange="updateStartHour(this.value)">H
+            </div>
+        </div>
         
         <div class="stats-scroll">
             <canvas id="myChart" style="max-height: 140px; display: block; margin: 0 auto;"></canvas>
+            <canvas id="sCurveChart" style="max-height: 140px; display: none; margin: 15px auto 0 auto;"></canvas>
+            
             <div id="calendarContainer" style="display:none;">
                 <div class="calendar-header">
                     <span>Lu</span><span>Ma</span><span>Me</span><span>Je</span><span>Ve</span><span>Sa</span><span>Di</span>
@@ -111,11 +119,13 @@
 </div>
 
 <script>
-    let timerInterval, startTime, elapsed = 0, isRunning = false, currentPriority = 4, currentView = 'day', myChart = null;
+    let timerInterval, startTime, elapsed = 0, isRunning = false, currentPriority = 4, currentView = 'day', myChart = null, sCurveChart = null;
     let sessions = JSON.parse(localStorage.getItem('focusSessions') || '[]');
     let dailyGoalHours = parseInt(localStorage.getItem('focusDailyGoal') || '7');
+    let dayStartHour = parseInt(localStorage.getItem('focusStartHour') || '9');
 
     document.getElementById('goalInput').value = dailyGoalHours;
+    document.getElementById('startHourInput').value = dayStartHour;
 
     function updateGoal(val) {
         let parsed = parseInt(val);
@@ -125,6 +135,16 @@
         localStorage.setItem('focusDailyGoal', parsed);
         document.getElementById('goalInput').value = parsed;
         updateDayStats();
+    }
+
+    function updateStartHour(val) {
+        let parsed = parseInt(val);
+        if (isNaN(parsed) || parsed < 0) parsed = 0;
+        if (parsed > 23) parsed = 23;
+        dayStartHour = parsed;
+        localStorage.setItem('focusStartHour', parsed);
+        document.getElementById('startHourInput').value = parsed;
+        if (currentView === 'day') renderCharts();
     }
 
     function formatDuration(sec) {
@@ -174,7 +194,6 @@
         const goalSeconds = dailyGoalHours * 3600;
         document.getElementById('percText').textContent = Math.min((totalSec / goalSeconds) * 100, 100).toFixed(1) + "%";
         
-        // Calcul et affichage de l'heure de fin estimée
         const remainingSec = Math.max(0, goalSeconds - totalSec);
         const estEndEl = document.getElementById('estimatedEnd');
         
@@ -184,12 +203,11 @@
             const now = new Date();
             let estimatedEndTime = new Date(now.getTime() + remainingSec * 1000);
             
-            // Logique de pause déjeuner (1 heure ajoutée si on commence avant 12:30 et qu'on termine après 12:30)
             const lunchLimit = new Date(now);
             lunchLimit.setHours(12, 30, 0, 0);
             
             if (now < lunchLimit && estimatedEndTime > lunchLimit) {
-                estimatedEndTime = new Date(estimatedEndTime.getTime() + 3600 * 1000); // Ajoute 1h (3600s)
+                estimatedEndTime = new Date(estimatedEndTime.getTime() + 3600 * 1000);
             }
             
             const timeStr = estimatedEndTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
@@ -213,24 +231,31 @@
         document.querySelectorAll('.nav-btn').forEach(b => {
             b.classList.toggle('active', b.id === `tab-${view}`);
         });
+        document.getElementById('startHourContainer').style.display = (view === 'day') ? 'block' : 'none';
         renderCharts();
     }
 
     function renderCharts() {
         if (myChart) myChart.destroy();
+        if (sCurveChart) sCurveChart.destroy();
+        
         const ctx = document.getElementById('myChart').getContext('2d');
+        const sCtx = document.getElementById('sCurveChart').getContext('2d');
         const listContainer = document.getElementById('sessionsListContainer');
         const calContainer = document.getElementById('calendarContainer');
         const canvasEl = document.getElementById('myChart');
+        const sCurveCanvasEl = document.getElementById('sCurveChart');
         
         listContainer.innerHTML = '';
         calContainer.style.display = 'none';
         canvasEl.style.display = 'block';
+        sCurveCanvasEl.style.display = 'none';
 
         const selectedDateStr = document.getElementById('dateSelector').value || new Date().toISOString().split('T')[0];
         const selectedDate = new Date(selectedDateStr);
 
         if (currentView === 'day') {
+            sCurveCanvasEl.style.display = 'block';
             const daySess = sessions.filter(s => new Date(s.date).toISOString().split('T')[0] === selectedDateStr);
             const data = [1,2,3,4].map(p => daySess.filter(s => s.priority === p).reduce((a,s) => a+s.duration, 0));
             const totalWorked = data.reduce((a,b)=>a+b,0);
@@ -238,19 +263,99 @@
             const remaining = Math.max(0, goalSeconds - totalWorked);
             data.push(remaining);
 
+            // 1. Camembert
             myChart = new Chart(ctx, {
                 type: 'pie',
                 data: {
                     labels: ['P1', 'P2', 'P3', 'P4', 'Reste'],
                     datasets: [{
-                        data: data.map(s => (s/60).toFixed(1)), // en minutes
+                        data: data.map(s => (s/60).toFixed(1)),
                         backgroundColor: ['#FF4D4D', '#FF9F43', '#F1C40F', '#2ECC71', '#2c2c2c']
                     }]
                 },
                 options: { plugins: { legend: { position: 'right', labels: { color: 'white', boxWidth: 10, font: { size: 9 } } } } }
             });
 
-            // Afficher la liste des sessions individuelles
+            // 2. S-Curve (Linear progression analysis)
+            const labels = [];
+            const theoreticalData = [];
+            const actualData = [];
+            
+            let lunchIncluded = (dayStartHour < 12.5);
+            let theoreticalTotalElapsed = dailyGoalHours + (lunchIncluded ? 1 : 0);
+            let endHour = Math.max(dayStartHour + theoreticalTotalElapsed, 18); // Au moins jusqu'à 18h
+
+            for (let h = dayStartHour; h <= endHour; h++) {
+                labels.push(`${String(h).padStart(2, '0')}:00`);
+                
+                // Calcul Théorique
+                let theoFocus = 0;
+                const elapsed = h - dayStartHour;
+                if (h <= 12.5) {
+                    theoFocus = elapsed;
+                } else if (h <= 13.5) {
+                    theoFocus = 12.5 - dayStartHour; // Pause déjeuner flat
+                } else {
+                    theoFocus = elapsed - (lunchIncluded ? 1 : 0);
+                }
+                theoFocus = Math.max(0, Math.min(dailyGoalHours, theoFocus));
+                theoreticalData.push(theoFocus);
+
+                // Calcul Réalisé
+                const limitTime = new Date(selectedDate);
+                limitTime.setHours(h, 0, 0, 0);
+                
+                const actualSecAtH = daySess
+                    .filter(s => new Date(s.date) <= limitTime)
+                    .reduce((sum, s) => sum + s.duration, 0);
+
+                const now = new Date();
+                if (selectedDate.toDateString() === now.toDateString() && limitTime > now) {
+                    actualData.push(null); // Ne pas dessiner dans le futur d'aujourd'hui
+                } else {
+                    actualData.push(actualSecAtH / 3600);
+                }
+            }
+
+            sCurveChart = new Chart(sCtx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [
+                        {
+                            label: 'Réalisé',
+                            data: actualData,
+                            borderColor: '#3498db',
+                            backgroundColor: 'rgba(52, 152, 219, 0.1)',
+                            borderWidth: 2,
+                            fill: true,
+                            tension: 0.1,
+                            spanGaps: false
+                        },
+                        {
+                            label: 'Théorique (Ideal)',
+                            data: theoreticalData,
+                            borderColor: '#777',
+                            borderDash: [5, 5],
+                            borderWidth: 1.5,
+                            fill: false,
+                            tension: 0
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    scales: {
+                        x: { ticks: { color: 'white', font: { size: 8 } }, grid: { display: false } },
+                        y: { ticks: { color: 'white', font: { size: 8 } }, grid: { color: '#333' }, title: { display: true, text: 'Heures', color: '#888', font: { size: 8 } } }
+                    },
+                    plugins: {
+                        legend: { position: 'top', labels: { color: 'white', boxWidth: 10, font: { size: 8 } } }
+                    }
+                }
+            });
+
+            // Liste des sessions
             if (daySess.length > 0) {
                 listContainer.innerHTML = '<h4 style="margin:10px 0 5px 0; font-size:12px;">Sessions du jour</h4>';
                 daySess.forEach((s, idx) => {
@@ -267,7 +372,6 @@
             }
 
         } else if (currentView === 'week') {
-            // Calculer les 7 jours glissants se terminant à la date sélectionnée
             const labels = [];
             const dataP1 = [], dataP2 = [], dataP3 = [], dataP4 = [];
             
@@ -323,13 +427,10 @@
             const year = selectedDate.getFullYear();
             const month = selectedDate.getMonth();
             
-            // Premier jour du mois
             const firstDayIndex = new Date(year, month, 1).getDay(); 
-            // Ajustement index (Lundi = 0, Dimanche = 6)
             const startingOffset = (firstDayIndex + 6) % 7;
             const daysInMonth = new Date(year, month + 1, 0).getDate();
             
-            // Espaces vides pour l'offset du début de mois
             for (let x = 0; x < startingOffset; x++) {
                 grid.innerHTML += `<div style="height:32px;"></div>`;
             }
