@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <title>Focus Meter</title>
+    <style>
+        :root {
+            --bg: #121212;
+            --panel: #1e1e1e;
+            --accent: #007bff;
+            --text: #ffffff;
+            --muted: #888;
+            --p1: #ff5252; --p2: #ff9800; --p3: #ffeb3b; --p4: #4caf50;
+        }
+        body { font-family: sans-serif; background: var(--bg); color: var(--text); margin: 0; display: flex; justify-content: center; align-items: center; height: 100vh; overflow: hidden; }
+        
+        .app-container { width: 300px; height: 300px; background: var(--panel); border-radius: 16px; padding: 20px; display: flex; flex-direction: column; justify-content: space-between; box-sizing: border-box; }
+        
+        /* Stats & Progress */
+        .header { display: flex; justify-content: space-between; font-size: 12px; color: var(--muted); }
+        .progress-bar { height: 4px; background: #333; margin: 5px 0; border-radius: 2px; }
+        #progressFill { height: 100%; background: var(--accent); width: 0%; border-radius: 2px; transition: width 0.3s; }
+
+        /* Timer */
+        #timer { font-size: 48px; font-weight: bold; text-align: center; margin: 10px 0; font-variant-numeric: tabular-nums; }
+        
+        /* Priorities */
+        .priorities { display: flex; gap: 5px; justify-content: center; margin-bottom: 15px; }
+        .p-btn { border: 1px solid #444; background: transparent; color: var(--muted); padding: 5px 10px; border-radius: 4px; cursor: pointer; font-size: 10px; }
+        .p-btn.active { border-color: var(--accent); color: var(--accent); font-weight: bold; }
+
+        /* Controls */
+        .controls { display: flex; gap: 10px; }
+        button { flex: 1; padding: 10px; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; }
+        #startStopBtn { background: var(--accent); color: white; }
+        #viewHistory { background: #333; color: white; }
+
+        /* History View */
+        #historySection { display: none; height: 100%; overflow-y: auto; }
+        .history-item { font-size: 12px; border-bottom: 1px solid #333; padding: 8px 0; display: flex; justify-content: space-between; }
+    </style>
+</head>
+<body>
+
+<div class="app-container" id="mainView">
+    <div id="timerSection">
+        <div class="header">
+            <span>OBJECTIF: 8H</span>
+            <span id="dayTotal">00:00:00</span>
+        </div>
+        <div class="progress-bar"><div id="progressFill"></div></div>
+        
+        <div id="timer">00:00:00</div>
+        
+        <div class="priorities">
+            <button class="p-btn" onclick="setPriority(1)">P1</button>
+            <button class="p-btn" onclick="setPriority(2)">P2</button>
+            <button class="p-btn" onclick="setPriority(3)">P3</button>
+            <button class="p-btn active" onclick="setPriority(4)">P4</button>
+        </div>
+
+        <div class="controls">
+            <button id="startStopBtn" onclick="toggleTimer()">DÉMARRER</button>
+            <button id="viewHistory" onclick="showHistory()">HISTOIRE</button>
+        </div>
+    </div>
+
+    <div id="historySection">
+        <div style="text-align: right;"><button onclick="hideHistory()" style="background:transparent; color:white; width: auto;">✕</button></div>
+        <h3 style="margin-top:0">Sessions</h3>
+        <div id="historyList"></div>
+    </div>
+</div>
+
+<script>
+    let timerInterval, startTime, elapsed = 0;
+    let isRunning = false;
+    let currentPriority = 4;
+    let sessions = JSON.parse(localStorage.getItem('focusSessions') || '[]');
+
+    function setPriority(p) {
+        currentPriority = p;
+        document.querySelectorAll('.p-btn').forEach((b, i) => b.classList.toggle('active', i+1 === p));
+    }
+
+    function toggleTimer() {
+        const btn = document.getElementById('startStopBtn');
+        if (!isRunning) {
+            startTime = Date.now() - elapsed;
+            timerInterval = setInterval(updateDisplay, 1000);
+            btn.textContent = "STOP";
+            btn.style.background = "#ff5252";
+            isRunning = true;
+        } else {
+            clearInterval(timerInterval);
+            isRunning = false;
+            saveSession(elapsed / 1000, currentPriority);
+            elapsed = 0;
+            updateDisplay();
+            btn.textContent = "DÉMARRER";
+            btn.style.background = "var(--accent)";
+        }
+    }
+
+    function updateDisplay() {
+        if(isRunning) elapsed = Date.now() - startTime;
+        const h = Math.floor(elapsed / 3600000);
+        const m = Math.floor((elapsed % 3600000) / 60000);
+        const s = Math.floor((elapsed % 60000) / 1000);
+        document.getElementById('timer').textContent = 
+            `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+        updateTotalStats();
+    }
+
+    function saveSession(seconds, priority) {
+        sessions.push({ date: Date.now(), duration: seconds, priority: priority });
+        localStorage.setItem('focusSessions', JSON.stringify(sessions));
+    }
+
+    function updateTotalStats() {
+        const today = new Date().toDateString();
+        const totalSeconds = sessions
+            .filter(s => new Date(s.date).toDateString() === today)
+            .reduce((acc, curr) => acc + curr.duration, 0) + (isRunning ? elapsed / 1000 : 0);
+        
+        const h = Math.floor(totalSeconds / 3600);
+        const m = Math.floor((totalSeconds % 3600) / 60);
+        const s = Math.floor(totalSeconds % 60);
+        document.getElementById('dayTotal').textContent = `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+        
+        // Progress Bar (8h = 28800 seconds)
+        const percent = Math.min((totalSeconds / 28800) * 100, 100);
+        document.getElementById('progressFill').style.width = percent + '%';
+    }
+
+    function showHistory() {
+        document.getElementById('timerSection').style.display = 'none';
+        document.getElementById('historySection').style.display = 'block';
+        const list = document.getElementById('historyList');
+        list.innerHTML = sessions.slice().reverse().map(s => {
+            const date = new Date(s.date).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+            return `<div class="history-item"><span>${date} (P${s.priority})</span><span>${(s.duration/60).toFixed(1)} min</span></div>`;
+        }).join('');
+    }
+
+    function hideHistory() {
+        document.getElementById('timerSection').style.display = 'flex';
+        document.getElementById('historySection').style.display = 'none';
+    }
+
+    updateTotalStats();
+</script>
+</body>
+</html>
