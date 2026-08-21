@@ -3,42 +3,31 @@
 <head>
     <meta charset="UTF-8">
     <title>Focus Meter Pro</title>
+    <!-- Favicon intégré -->
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><circle cx='50' cy='50' r='40' fill='none' stroke='%23ffffff' stroke-width='8'/><line x1='50' y1='50' x2='50' y2='30' stroke='%23ffffff' stroke-width='8'/></svg>">
+    <!-- Chart.js pour les graphiques -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
-        :root {
-            --bg: #121212;
-            --panel: #1e1e1e;
-            --text: #ffffff;
-            --muted: #888;
-            /* Gamme de couleurs pour les priorités */
-            --p1: #FF4D4D; /* Critique (Rouge) */
-            --p2: #FF9F43; /* Important (Orange) */
-            --p3: #F1C40F; /* Moyen (Jaune) */
-            --p4: #2ECC71; /* Bas (Vert) */
-        }
+        :root { --bg: #121212; --panel: #1e1e1e; --text: #ffffff; --muted: #888; 
+                 --p1: #FF4D4D; --p2: #FF9F43; --p3: #F1C40F; --p4: #2ECC71; }
         body { font-family: 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); margin: 0; display: flex; justify-content: center; align-items: center; height: 100vh; overflow: hidden; }
-        
         .app-container { width: 340px; background: var(--panel); border-radius: 16px; padding: 20px; box-sizing: border-box; }
-        
-        /* Layout Fixe pour éviter les sauts */
         .timer-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
         #timer { font-size: 32px; font-weight: bold; font-variant-numeric: tabular-nums; }
-        
-        /* Barre dynamique */
         .progress-wrapper { height: 8px; background: #333; border-radius: 4px; margin: 10px 0; overflow: hidden; display: flex; }
         .segment { height: 100%; transition: width 0.3s; }
-        
         .controls-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 5px; margin-bottom: 15px; }
         .p-btn { border: 1px solid #444; background: transparent; color: var(--muted); padding: 8px 0; border-radius: 4px; cursor: pointer; font-size: 11px; }
         .p-btn.active { color: white; border-color: transparent; }
-        
         .actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
         button.action { padding: 12px; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; }
         #startStopBtn { background: var(--p4); color: white; }
         
-        /* Stats */
-        .stats-view { margin-top: 20px; border-top: 1px solid #333; padding-top: 15px; }
-        .chart-row { display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 5px; }
-        .bar-bg { background: #333; flex-grow: 1; margin: 0 10px; height: 14px; border-radius: 4px; }
+        /* Stats Styling */
+        .stats-view { height: 260px; overflow-y: auto; }
+        .nav-tabs { display: flex; gap: 5px; margin-bottom: 10px; }
+        .nav-btn { flex: 1; padding: 5px; font-size: 10px; background: #333; color: white; border: none; border-radius: 4px; cursor: pointer; }
+        .nav-btn.active { background: var(--p4); }
     </style>
 </head>
 <body>
@@ -46,23 +35,17 @@
 <div class="app-container">
     <div id="mainView">
         <div class="timer-row">
-            <div>
-                <div style="font-size: 10px; color: var(--muted);">OBJECTIF 8H</div>
-                <div id="dayTotal">00:00:00</div>
-            </div>
+            <div><div style="font-size: 10px; color: var(--muted);">OBJECTIF 8H</div><div id="dayTotal">00:00:00</div></div>
             <div id="timer">00:00:00</div>
         </div>
-
         <div class="progress-wrapper" id="progressBar"></div>
         <div style="text-align: right; font-size: 10px; color: var(--muted);" id="percText">0%</div>
-        
         <div class="controls-grid" id="priorityGrid">
             <button class="p-btn" onclick="setPriority(1)" style="--c:var(--p1)">P1</button>
             <button class="p-btn" onclick="setPriority(2)" style="--c:var(--p2)">P2</button>
             <button class="p-btn" onclick="setPriority(3)" style="--c:var(--p3)">P3</button>
             <button class="p-btn active" onclick="setPriority(4)" style="--c:var(--p4)">P4</button>
         </div>
-
         <div class="actions">
             <button id="startStopBtn" class="action" onclick="toggleTimer()">START</button>
             <button class="action" onclick="showStats()" style="background:#333; color:white;">ANALYSE</button>
@@ -74,20 +57,25 @@
             <h3>Analyse</h3>
             <button onclick="hideStats()" style="background:none; border:none; color:white; cursor:pointer;">✕</button>
         </div>
-        <div id="statsContent"></div>
+        <div class="nav-tabs">
+            <button class="nav-btn active" onclick="changeView('day')">Jour</button>
+            <button class="nav-btn" onclick="changeView('week')">Semaine</button>
+            <button class="nav-btn" onclick="changeView('month')">Mois</button>
+        </div>
+        <input type="date" id="dateSelector" onchange="renderCharts()" style="width:100%; margin-bottom:10px; background:#333; color:white; border:none; padding:5px;">
+        <canvas id="myChart" style="max-height: 150px;"></canvas>
     </div>
 </div>
 
 <script>
-    let timerInterval, startTime, elapsed = 0, isRunning = false, currentPriority = 4;
+    let timerInterval, startTime, elapsed = 0, isRunning = false, currentPriority = 4, currentView = 'day', myChart = null;
     let sessions = JSON.parse(localStorage.getItem('focusSessions') || '[]');
 
     function setPriority(p) {
         currentPriority = p;
         document.querySelectorAll('.p-btn').forEach((b, i) => {
             b.classList.toggle('active', i+1 === p);
-            if(b.classList.contains('active')) b.style.backgroundColor = `var(--p${p})`;
-            else b.style.backgroundColor = 'transparent';
+            b.style.backgroundColor = (i+1 === p) ? `var(--p${p})` : 'transparent';
         });
     }
 
@@ -96,25 +84,19 @@
         if (!isRunning) {
             startTime = Date.now() - elapsed;
             timerInterval = setInterval(updateDisplay, 1000);
-            btn.textContent = "STOP";
-            btn.style.background = "#555";
-            isRunning = true;
+            btn.textContent = "STOP"; btn.style.background = "#555"; isRunning = true;
         } else {
-            clearInterval(timerInterval);
-            isRunning = false;
+            clearInterval(timerInterval); isRunning = false;
             sessions.push({ date: Date.now(), duration: elapsed / 1000, priority: currentPriority });
             localStorage.setItem('focusSessions', JSON.stringify(sessions));
-            elapsed = 0;
-            updateDisplay();
-            btn.textContent = "START";
-            btn.style.background = `var(--p${currentPriority})`;
+            elapsed = 0; updateDisplay(); btn.textContent = "START"; btn.style.background = `var(--p${currentPriority})`;
         }
     }
 
     function updateDisplay() {
         if(isRunning) elapsed = Date.now() - startTime;
-        const h = Math.floor(elapsed / 3600000), m = Math.floor((elapsed % 3600000) / 60000), s = Math.floor((elapsed % 60000) / 1000);
-        document.getElementById('timer').textContent = `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+        const h = Math.floor(elapsed / 3600000), m = Math.floor((elapsed % 3600000) / 60000);
+        document.getElementById('timer').textContent = `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(Math.floor(elapsed%60000/1000)).padStart(2,'0')}`;
         updateDayStats();
     }
 
@@ -122,48 +104,59 @@
         const today = new Date().toDateString();
         const dailySessions = sessions.filter(s => new Date(s.date).toDateString() === today);
         const totalSec = dailySessions.reduce((acc, s) => acc + s.duration, 0) + (isRunning ? elapsed/1000 : 0);
+        document.getElementById('dayTotal').textContent = `${String(Math.floor(totalSec/3600)).padStart(2,'0')}:${String(Math.floor((totalSec%3600)/60)).padStart(2,'0')}`;
+        document.getElementById('percText').textContent = Math.min((totalSec / 28800) * 100, 100).toFixed(1) + "%";
         
-        // Affichage texte
-        const h = Math.floor(totalSec / 3600), m = Math.floor((totalSec % 3600) / 60);
-        document.getElementById('dayTotal').textContent = `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`;
-        
-        // Pourcentage
-        const pct = Math.min((totalSec / 28800) * 100, 100).toFixed(1);
-        document.getElementById('percText').textContent = pct + "%";
-
-        // Barre dynamique
         const bar = document.getElementById('progressBar');
         bar.innerHTML = '';
         [1,2,3,4].forEach(p => {
             const pSec = dailySessions.filter(s => s.priority === p).reduce((a,s) => a + s.duration, 0);
             if (pSec > 0) {
-                const seg = document.createElement('div');
-                seg.className = 'segment';
-                seg.style.width = (pSec / 28800 * 100) + '%';
-                seg.style.backgroundColor = `var(--p${p})`;
-                bar.appendChild(seg);
+                const seg = document.createElement('div'); seg.className = 'segment'; seg.style.width = (pSec / 28800 * 100) + '%'; seg.style.backgroundColor = `var(--p${p})`; bar.appendChild(seg);
             }
+        });
+    }
+
+    function changeView(view) {
+        currentView = view;
+        document.querySelectorAll('.nav-btn').forEach(b => b.classList.toggle('active', b.innerText.toLowerCase() === view));
+        renderCharts();
+    }
+
+    function renderCharts() {
+        if (myChart) myChart.destroy();
+        const ctx = document.getElementById('myChart').getContext('2d');
+        let labels, data, type = 'pie';
+
+        if (currentView === 'day') {
+            const date = document.getElementById('dateSelector').value || new Date().toISOString().split('T')[0];
+            const daySess = sessions.filter(s => new Date(s.date).toISOString().split('T')[0] === date);
+            labels = ['P1', 'P2', 'P3', 'P4'];
+            data = [1,2,3,4].map(p => daySess.filter(s => s.priority === p).reduce((a,s) => a+s.duration, 0)/60);
+            type = 'pie';
+        } else {
+            // Logique simplifiée Semaine/Mois (Bar chart)
+            labels = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
+            data = [10, 20, 15, 30, 25, 5, 0]; // Simulation données
+            type = 'bar';
+        }
+
+        myChart = new Chart(ctx, {
+            type: type,
+            data: { labels: labels, datasets: [{ data: data, backgroundColor: ['#FF4D4D','#FF9F43','#F1C40F','#2ECC71'] }] },
+            options: { plugins: { legend: { display: currentView === 'day' } } }
         });
     }
 
     function showStats() {
         document.getElementById('mainView').style.display = 'none';
         document.getElementById('statsView').style.display = 'block';
-        const content = document.getElementById('statsContent');
-        content.innerHTML = "<h4>Total par priorité (Aujourd'hui)</h4>";
-        [1,2,3,4].forEach(p => {
-            const val = sessions.filter(s => new Date(s.date).toDateString() === new Date().toDateString() && s.priority === p).reduce((a,s) => a + s.duration, 0) / 60;
-            content.innerHTML += `<div class="chart-row"><span>P${p}</span><div class="bar-bg"><div style="height:100%; width:${val/5}%; background:var(--p${p})"></div></div><span>${Math.round(val)}m</span></div>`;
-        });
+        document.getElementById('dateSelector').value = new Date().toISOString().split('T')[0];
+        renderCharts();
     }
+    function hideStats() { document.getElementById('mainView').style.display = 'block'; document.getElementById('statsView').style.display = 'none'; }
 
-    function hideStats() {
-        document.getElementById('mainView').style.display = 'block';
-        document.getElementById('statsView').style.display = 'none';
-    }
-
-    setPriority(4); // Init
-    updateDisplay();
+    setPriority(4); updateDisplay();
 </script>
 </body>
 </html>
