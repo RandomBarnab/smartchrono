@@ -3,75 +3,135 @@
 <head>
     <meta charset="UTF-8">
     <title>Focus Meter Pro</title>
+    <!-- Favicon intégré -->
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><circle cx='50' cy='50' r='40' fill='none' stroke='%23ffffff' stroke-width='8'/><line x1='50' y1='50' x2='50' y2='30' stroke='%23ffffff' stroke-width='8'/></svg>">
+    <!-- Chart.js pour les graphiques -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
-        :root { --bg: #121212; --panel: #1e1e1e; --text: #ffffff; --muted: #888; 
-                 --p1: #FF4D4D; --p2: #FF9F43; --p3: #F1C40F; --p4: #2ECC71; --rem: #222; }
+        :root { 
+            --bg: #121212; 
+            --panel: #1e1e1e; 
+            --text: #ffffff; 
+            --muted: #888; 
+            --p1: #FF4D4D; 
+            --p2: #FF9F43; 
+            --p3: #F1C40F; 
+            --p4: #2ECC71; 
+            --rem: #2c2c2c; /* Couleur du temps restant */
+        }
         body { font-family: 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); margin: 0; display: flex; justify-content: center; align-items: center; height: 100vh; overflow: hidden; }
         .app-container { width: 340px; background: var(--panel); border-radius: 16px; padding: 20px; box-sizing: border-box; }
         .timer-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
         #timer { font-size: 32px; font-weight: bold; font-variant-numeric: tabular-nums; }
-        .controls-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 5px; margin-bottom: 10px; }
+        
+        /* Barre d'avancement */
+        .progress-wrapper { height: 8px; background: #333; border-radius: 4px; margin: 10px 0; overflow: hidden; display: flex; }
+        .segment { height: 100%; transition: width 0.3s; }
+        
+        .controls-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 5px; margin-bottom: 15px; }
         .p-btn { border: 1px solid #444; background: transparent; color: var(--muted); padding: 8px 0; border-radius: 4px; cursor: pointer; font-size: 11px; }
         .p-btn.active { color: white; border-color: transparent; }
-        .actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }
-        button.action { padding: 10px; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; }
+        .actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+        button.action { padding: 12px; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; }
+        #startStopBtn { background: var(--p4); color: white; }
         
-        /* Stats Styling */
-        .stats-view { height: 300px; overflow-y: auto; }
+        /* Zone d'analyse */
+        .stats-view { display: none; }
+        .nav-tabs { display: flex; gap: 5px; margin-bottom: 10px; }
+        .nav-btn { flex: 1; padding: 6px; font-size: 10px; background: #333; color: white; border: none; border-radius: 4px; cursor: pointer; }
+        .nav-btn.active { background: var(--p4); }
+        .stats-scroll { max-height: 190px; overflow-y: auto; padding-right: 5px; margin-top: 10px; }
+        
+        /* Calendrier adaptatif */
+        .calendar-header { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; text-align: center; font-size: 9px; color: var(--muted); margin-bottom: 4px; }
         .calendar-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
-        .day-cell { height: 35px; background: #333; border-radius: 4px; display: flex; align-items: center; justify-content: center; font-size: 9px; }
-        .mini-pie { width: 20px; height: 20px; border-radius: 50%; }
+        .day-cell { position: relative; height: 32px; background: #252525; border-radius: 4px; display: flex; flex-direction: column; align-items: center; justify-content: space-between; padding: 2px 0; box-sizing: border-box; }
+        .day-num { font-size: 8px; font-weight: bold; color: #fff; }
+        .mini-pie { width: 14px; height: 14px; border-radius: 50%; background: #333; }
+        
+        /* Liste des sessions */
+        .session-item { display: flex; justify-content: space-between; font-size: 11px; border-bottom: 1px solid #333; padding: 4px 0; }
+        .session-priority { font-weight: bold; padding: 1px 4px; border-radius: 3px; font-size: 9px; color: white; }
     </style>
 </head>
 <body>
 
 <div class="app-container">
+    <!-- VUE PRINCIPALE -->
     <div id="mainView">
         <div class="timer-row">
             <div>
-                <div style="font-size: 9px; color: var(--muted);">OBJECTIF <input type="number" id="goalInput" value="7" style="width:25px; background:transparent; border:none; color:white; font-size:9px;" onchange="updateGoal()">H</div>
-                <div id="dayTotal">00h00</div>
+                <div style="font-size: 10px; color: var(--muted); display: flex; align-items: center; gap: 4px;">
+                    OBJECTIF 
+                    <input type="number" id="goalInput" min="1" max="24" value="7" style="width: 32px; background: #2a2a2a; border: 1px solid #444; color: white; border-radius: 4px; text-align: center; padding: 1px; font-size: 10px;" onchange="updateGoal(this.value)">H
+                </div>
+                <div id="dayTotal">00:00:00</div>
             </div>
             <div id="timer">00:00:00</div>
         </div>
+        <div class="progress-wrapper" id="progressBar"></div>
+        <div style="text-align: right; font-size: 10px; color: var(--muted);" id="percText">0%</div>
         <div class="controls-grid" id="priorityGrid">
-            <button class="p-btn" onclick="setPriority(1)">P1</button>
-            <button class="p-btn" onclick="setPriority(2)">P2</button>
-            <button class="p-btn" onclick="setPriority(3)">P3</button>
-            <button class="p-btn active" onclick="setPriority(4)">P4</button>
+            <button class="p-btn" onclick="setPriority(1)" style="--c:var(--p1)">P1</button>
+            <button class="p-btn" onclick="setPriority(2)" style="--c:var(--p2)">P2</button>
+            <button class="p-btn" onclick="setPriority(3)" style="--c:var(--p3)">P3</button>
+            <button class="p-btn active" onclick="setPriority(4)" style="--c:var(--p4)">P4</button>
         </div>
         <div class="actions">
-            <button id="startStopBtn" class="action" onclick="toggleTimer()" style="background:var(--p4); color:white;">START</button>
+            <button id="startStopBtn" class="action" onclick="toggleTimer()">START</button>
             <button class="action" onclick="showStats()" style="background:#333; color:white;">ANALYSE</button>
         </div>
     </div>
 
-    <div id="statsView" style="display:none;">
-        <div style="display:flex; justify-content:space-between; align-items:center;">
-            <h3>Analyse</h3>
-            <button onclick="hideStats()" style="background:none; border:none; color:white; cursor:pointer;">✕</button>
+    <!-- VUE STATS -->
+    <div id="statsView" class="stats-view">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 10px;">
+            <h3 style="margin:0; font-size:16px;">Analyse</h3>
+            <button onclick="hideStats()" style="background:none; border:none; color:white; cursor:pointer; font-size:16px;">✕</button>
         </div>
-        <div class="nav-tabs" style="display:flex; gap:5px; margin-bottom:10px;">
-            <button class="nav-btn" onclick="renderCharts('day')">Jour</button>
-            <button class="nav-btn" onclick="renderCharts('week')">Semaine</button>
-            <button class="nav-btn" onclick="renderCharts('month')">Mois</button>
+        <div class="nav-tabs">
+            <button id="tab-day" class="nav-btn active" onclick="changeView('day')">Jour</button>
+            <button id="tab-week" class="nav-btn" onclick="changeView('week')">Semaine</button>
+            <button id="tab-month" class="nav-btn" onclick="changeView('month')">Mois</button>
         </div>
-        <div id="chartContainer" style="height:200px; display:flex; align-items:center; justify-content:center;">
-            <canvas id="myChart"></canvas>
-            <div id="monthGrid" class="calendar-grid" style="display:none; width:100%;"></div>
+        <input type="date" id="dateSelector" onchange="renderCharts()" style="width:100%; margin-bottom:10px; background:#333; color:white; border:none; padding:5px; border-radius:4px; font-size:11px;">
+        
+        <div class="stats-scroll">
+            <canvas id="myChart" style="max-height: 140px; display: block; margin: 0 auto;"></canvas>
+            <div id="calendarContainer" style="display:none;">
+                <div class="calendar-header">
+                    <span>Lu</span><span>Ma</span><span>Me</span><span>Je</span><span>Ve</span><span>Sa</span><span>Di</span>
+                </div>
+                <div id="monthGrid" class="calendar-grid"></div>
+            </div>
+            <div id="sessionsListContainer" style="margin-top: 15px;"></div>
         </div>
     </div>
 </div>
 
 <script>
-    let timerInterval, startTime, elapsed = 0, isRunning = false, currentPriority = 4, myChart = null;
+    let timerInterval, startTime, elapsed = 0, isRunning = false, currentPriority = 4, currentView = 'day', myChart = null;
     let sessions = JSON.parse(localStorage.getItem('focusSessions') || '[]');
-    let dailyGoal = parseInt(localStorage.getItem('dailyGoal') || 7) * 3600;
+    let dailyGoalHours = parseInt(localStorage.getItem('focusDailyGoal') || '7');
 
-    function updateGoal() { dailyGoal = document.getElementById('goalInput').value * 3600; localStorage.setItem('dailyGoal', document.getElementById('goalInput').value); updateDayStats(); }
-    function format(s) { return `${String(Math.floor(s/3600)).padStart(2,'0')}h${String(Math.floor((s%3600)/60)).padStart(2,'0')}`; }
+    document.getElementById('goalInput').value = dailyGoalHours;
+
+    function updateGoal(val) {
+        let parsed = parseInt(val);
+        if (isNaN(parsed) || parsed < 1) parsed = 1;
+        if (parsed > 24) parsed = 24;
+        dailyGoalHours = parsed;
+        localStorage.setItem('focusDailyGoal', parsed);
+        document.getElementById('goalInput').value = parsed;
+        updateDayStats();
+    }
+
+    function formatDuration(sec) {
+        const h = Math.floor(sec / 3600);
+        const m = Math.floor((sec % 3600) / 60);
+        if (h > 0) return `${h}h ${m}m`;
+        return `${m}m ${Math.floor(sec % 60)}s`;
+    }
 
     function setPriority(p) {
         currentPriority = p;
@@ -97,7 +157,8 @@
 
     function updateDisplay() {
         if(isRunning) elapsed = Date.now() - startTime;
-        document.getElementById('timer').textContent = new Date(elapsed).toISOString().substr(11, 8);
+        const h = Math.floor(elapsed / 3600000), m = Math.floor((elapsed % 3600000) / 60000), s = Math.floor((elapsed % 60000) / 1000);
+        document.getElementById('timer').textContent = `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
         updateDayStats();
     }
 
@@ -105,50 +166,197 @@
         const today = new Date().toDateString();
         const dailySessions = sessions.filter(s => new Date(s.date).toDateString() === today);
         const totalSec = dailySessions.reduce((acc, s) => acc + s.duration, 0) + (isRunning ? elapsed/1000 : 0);
-        document.getElementById('dayTotal').textContent = format(totalSec);
+        
+        const h = Math.floor(totalSec / 3600), m = Math.floor((totalSec % 3600) / 60), s = Math.floor(totalSec % 60);
+        document.getElementById('dayTotal').textContent = `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+        
+        const goalSeconds = dailyGoalHours * 3600;
+        document.getElementById('percText').textContent = Math.min((totalSec / goalSeconds) * 100, 100).toFixed(1) + "%";
+        
+        const bar = document.getElementById('progressBar');
+        bar.innerHTML = '';
+        [1,2,3,4].forEach(p => {
+            const pSec = dailySessions.filter(s => s.priority === p).reduce((a,s) => a + s.duration, 0);
+            if (pSec > 0) {
+                const seg = document.createElement('div'); seg.className = 'segment'; 
+                seg.style.width = (pSec / goalSeconds * 100) + '%'; 
+                seg.style.backgroundColor = `var(--p${p})`; bar.appendChild(seg);
+            }
+        });
     }
 
-    function renderCharts(mode) {
-        document.getElementById('chartContainer').innerHTML = mode === 'month' ? '<div id="monthGrid" class="calendar-grid"></div>' : '<canvas id="myChart"></canvas>';
-        const ctx = mode !== 'month' ? document.getElementById('myChart').getContext('2d') : null;
+    function changeView(view) {
+        currentView = view;
+        document.querySelectorAll('.nav-btn').forEach(b => {
+            b.classList.toggle('active', b.id === `tab-${view}`);
+        });
+        renderCharts();
+    }
+
+    function renderCharts() {
+        if (myChart) myChart.destroy();
+        const ctx = document.getElementById('myChart').getContext('2d');
+        const listContainer = document.getElementById('sessionsListContainer');
+        const calContainer = document.getElementById('calendarContainer');
+        const canvasEl = document.getElementById('myChart');
         
-        if (mode === 'day') {
-            const today = new Date().toDateString();
-            const daySess = sessions.filter(s => new Date(s.date).toDateString() === today);
+        listContainer.innerHTML = '';
+        calContainer.style.display = 'none';
+        canvasEl.style.display = 'block';
+
+        const selectedDateStr = document.getElementById('dateSelector').value || new Date().toISOString().split('T')[0];
+        const selectedDate = new Date(selectedDateStr);
+
+        if (currentView === 'day') {
+            const daySess = sessions.filter(s => new Date(s.date).toISOString().split('T')[0] === selectedDateStr);
             const data = [1,2,3,4].map(p => daySess.filter(s => s.priority === p).reduce((a,s) => a+s.duration, 0));
             const totalWorked = data.reduce((a,b)=>a+b,0);
-            data.push(Math.max(0, dailyGoal - totalWorked));
-            myChart = new Chart(ctx, { type: 'pie', data: { labels: ['P1','P2','P3','P4','Reste'], datasets: [{ data, backgroundColor: ['var(--p1)','var(--p2)','var(--p3)','var(--p4)','var(--rem)'] }] } });
-        } else if (mode === 'week') {
-            const last7 = [...Array(7)].map((_, i) => new Date(Date.now() - i * 86400000).toDateString()).reverse();
-            const data = last7.map(d => sessions.filter(s => new Date(s.date).toDateString() === d).reduce((a,s) => a+s.duration, 0) / 3600);
-            myChart = new Chart(ctx, { type: 'bar', data: { labels: last7.map(d=>d.slice(0,3)), datasets: [{ label: 'Heures', data, backgroundColor: 'var(--p4)' }] } });
-        } else {
-            const grid = document.getElementById('monthGrid');
-            const now = new Date();
-            const daysInMonth = new Date(now.getFullYear(), now.getMonth()+1, 0).getDate();
-            for(let i=1; i<=daysInMonth; i++) {
-                const dStr = new Date(now.getFullYear(), now.getMonth(), i).toDateString();
+            const goalSeconds = dailyGoalHours * 3600;
+            const remaining = Math.max(0, goalSeconds - totalWorked);
+            data.push(remaining);
+
+            myChart = new Chart(ctx, {
+                type: 'pie',
+                data: {
+                    labels: ['P1', 'P2', 'P3', 'P4', 'Reste'],
+                    datasets: [{
+                        data: data.map(s => (s/60).toFixed(1)), // en minutes
+                        backgroundColor: ['#FF4D4D', '#FF9F43', '#F1C40F', '#2ECC71', '#2c2c2c']
+                    }]
+                },
+                options: { plugins: { legend: { position: 'right', labels: { color: 'white', boxWidth: 10, font: { size: 9 } } } } }
+            });
+
+            // Afficher la liste des sessions individuelles
+            if (daySess.length > 0) {
+                listContainer.innerHTML = '<h4 style="margin:10px 0 5px 0; font-size:12px;">Sessions du jour</h4>';
+                daySess.forEach((s, idx) => {
+                    const timeStr = new Date(s.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                    listContainer.innerHTML += `
+                        <div class="session-item">
+                            <span>Session #${idx+1} à ${timeStr}</span>
+                            <span class="session-priority" style="background: var(--p${s.priority})">P${s.priority}</span>
+                            <span>${formatDuration(s.duration)}</span>
+                        </div>`;
+                });
+            } else {
+                listContainer.innerHTML = '<div style="font-size:11px; color:var(--muted); text-align:center;">Aucune session enregistrée pour ce jour.</div>';
+            }
+
+        } else if (currentView === 'week') {
+            // Calculer les 7 jours glissants se terminant à la date sélectionnée
+            const labels = [];
+            const dataP1 = [], dataP2 = [], dataP3 = [], dataP4 = [];
+            
+            for (let i = 6; i >= 0; i--) {
+                const d = new Date(selectedDate);
+                d.setDate(selectedDate.getDate() - i);
+                const dStr = d.toDateString();
+                const dayLabel = d.toLocaleDateString([], { weekday: 'short', day: 'numeric' });
+                labels.push(dayLabel);
+
                 const daySess = sessions.filter(s => new Date(s.date).toDateString() === dStr);
-                let gradient = "conic-gradient(#333 0% 100%)";
-                if(daySess.length > 0) {
+                dataP1.push(daySess.filter(s => s.priority === 1).reduce((a,s)=>a+s.duration,0)/3600);
+                dataP2.push(daySess.filter(s => s.priority === 2).reduce((a,s)=>a+s.duration,0)/3600);
+                dataP3.push(daySess.filter(s => s.priority === 3).reduce((a,s)=>a+s.duration,0)/3600);
+                dataP4.push(daySess.filter(s => s.priority === 4).reduce((a,s)=>a+s.duration,0)/3600);
+            }
+
+            myChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [
+                        { label: 'P1', data: dataP1, backgroundColor: '#FF4D4D' },
+                        { label: 'P2', data: dataP2, backgroundColor: '#FF9F43' },
+                        { label: 'P3', data: dataP3, backgroundColor: '#F1C40F' },
+                        { label: 'P4', data: dataP4, backgroundColor: '#2ECC71' }
+                    ]
+                },
+                options: {
+                    scales: {
+                        x: { stacked: true, grid: { display: false }, ticks: { color: 'white', font: { size: 8 } } },
+                        y: { stacked: true, grid: { color: '#333' }, ticks: { color: 'white', font: { size: 8 } } }
+                    },
+                    plugins: { legend: { display: false } }
+                }
+            });
+
+            const totalWeekSec = sessions.filter(s => {
+                const diffTime = Math.abs(selectedDate - new Date(s.date));
+                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                return diffDays <= 7;
+            }).reduce((a,s)=>a+s.duration, 0);
+
+            listContainer.innerHTML = `<div style="font-size:11px; color:var(--muted); text-align:center; margin-top:5px;">Total concentré (7 jours) : <b>${formatDuration(totalWeekSec)}</b></div>`;
+
+        } else if (currentView === 'month') {
+            canvasEl.style.display = 'none';
+            calContainer.style.display = 'block';
+            
+            const grid = document.getElementById('monthGrid');
+            grid.innerHTML = '';
+            
+            const year = selectedDate.getFullYear();
+            const month = selectedDate.getMonth();
+            
+            // Premier jour du mois
+            const firstDayIndex = new Date(year, month, 1).getDay(); 
+            // Ajustement index (Lundi = 0, Dimanche = 6)
+            const startingOffset = (firstDayIndex + 6) % 7;
+            const daysInMonth = new Date(year, month + 1, 0).getDate();
+            
+            // Espaces vides pour l'offset du début de mois
+            for (let x = 0; i = x < startingOffset; x++) {
+                grid.innerHTML += `<div style="height:32px;"></div>`;
+            }
+            
+            const goalSeconds = dailyGoalHours * 3600;
+
+            for (let day = 1; day <= daysInMonth; day++) {
+                const dayDate = new Date(year, month, day);
+                const daySess = sessions.filter(s => new Date(s.date).toDateString() === dayDate.toDateString());
+                
+                let gradientStr = 'var(--rem)';
+                const totalWorked = daySess.reduce((a,s)=>a+s.duration, 0);
+
+                if (totalWorked > 0) {
                     let acc = 0;
                     const segments = [1,2,3,4].map(p => {
-                        const dur = daySess.filter(s=>s.priority===p).reduce((a,s)=>a+s.duration,0);
-                        const start = (acc/dailyGoal)*100;
+                        const dur = daySess.filter(s => s.priority === p).reduce((a,s)=>a+s.duration,0);
+                        if (dur === 0) return null;
+                        const start = (acc / Math.max(goalSeconds, totalWorked)) * 100;
                         acc += dur;
-                        const end = (acc/dailyGoal)*100;
+                        const end = (acc / Math.max(goalSeconds, totalWorked)) * 100;
                         return `var(--p${p}) ${start}% ${end}%`;
-                    }).join(',');
-                    gradient = `conic-gradient(${segments}, #222 ${(acc/dailyGoal)*100}% 100%)`;
+                    }).filter(Boolean);
+
+                    if (totalWorked < goalSeconds) {
+                        segments.push(`var(--rem) ${(totalWorked / goalSeconds) * 100}% 100%`);
+                    }
+                    gradientStr = `conic-gradient(${segments.join(', ')})`;
                 }
-                grid.innerHTML += `<div class="day-cell"><div class="mini-pie" style="background:${gradient}"></div></div>`;
+
+                grid.innerHTML += `
+                    <div class="day-cell">
+                        <span class="day-num">${day}</span>
+                        <div class="mini-pie" style="background: ${gradientStr};"></div>
+                    </div>`;
             }
         }
     }
 
-    function showStats() { document.getElementById('mainView').style.display = 'none'; document.getElementById('statsView').style.display = 'block'; renderCharts('day'); }
-    function hideStats() { document.getElementById('mainView').style.display = 'block'; document.getElementById('statsView').style.display = 'none'; }
+    function showStats() {
+        document.getElementById('mainView').style.display = 'none';
+        document.getElementById('statsView').style.display = 'block';
+        document.getElementById('dateSelector').value = new Date().toISOString().split('T')[0];
+        changeView('day');
+    }
+
+    function hideStats() {
+        document.getElementById('mainView').style.display = 'block';
+        document.getElementById('statsView').style.display = 'none';
+    }
 
     setPriority(4); updateDisplay();
 </script>
