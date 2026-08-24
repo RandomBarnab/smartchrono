@@ -42,6 +42,12 @@
             --chart-ideal: #dddddd;
         }
 
+        /* Sécurité absolue anti-blocage de largeur */
+        * {
+            box-sizing: border-box;
+            min-width: 0 !important;
+        }
+
         body { 
             font-family: 'Segoe UI', sans-serif; 
             background: var(--bg); 
@@ -53,7 +59,6 @@
             height: 100vh; 
             width: 100vw;
             overflow: hidden; 
-            box-sizing: border-box;
             padding: 0;
             transition: background 0.3s;
         }
@@ -64,7 +69,6 @@
             height: 100vh; 
             background: var(--panel); 
             padding: 4vmin; 
-            box-sizing: border-box; 
             display: flex; 
             flex-direction: column;
             justify-content: space-between;
@@ -72,14 +76,14 @@
             border: 1px solid var(--border);
             transition: all 0.3s ease;
             overflow: hidden;
-            min-width: 0 !important; /* Débloque la réduction sous Chromium */
             min-height: 0 !important;
         }
 
-        #mainView { display: flex; flex-direction: column; justify-content: space-between; height: 100%; width: 100%; min-width: 0; }
-        #statsView { display: none; flex-direction: column; height: 100%; width: 100%; min-width: 0; }
+        #mainView { display: flex; flex-direction: column; justify-content: space-between; height: 100%; width: 100%; }
+        #statsView { display: none; flex-direction: column; height: 100%; width: 100%; }
 
-        .timer-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1.5vmin; width: 100%; min-width: 0; }
+        .timer-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1.5vmin; width: 100%; }
+        .timer-row > div { display: flex; flex-direction: column; flex-shrink: 1; overflow: hidden; }
         
         /* Chiffres du timer ultra-adaptatifs */
         #timer { 
@@ -87,28 +91,66 @@
             font-weight: bold; 
             font-variant-numeric: tabular-nums; 
             line-height: 1;
+            white-space: nowrap;
         }
         
-        #dayTotal { font-size: 4vmin; font-weight: bold; margin-top: 0.5vmin; }
-        #estimatedEnd { font-size: 2.5vmin; color: var(--muted); margin-top: 0.5vmin; font-style: italic; }
+        #dayTotal { font-size: 4vmin; font-weight: bold; margin-top: 0.5vmin; white-space: nowrap; }
+        #estimatedEnd { font-size: 2.5vmin; color: var(--muted); margin-top: 0.5vmin; font-style: italic; white-space: nowrap; text-overflow: ellipsis; overflow: hidden; }
         
         /* Barre d'avancement */
-        .progress-wrapper { height: 2vmin; background: var(--rem); border-radius: 1vmin; margin: 1.5vmin 0; overflow: hidden; display: flex; width: 100%; }
+        .progress-wrapper { height: 2vmin; background: var(--rem); border-radius: 1vmin; margin: 1.5vmin 0; overflow: hidden; display: flex; width: 100%; flex-shrink: 0; }
         .segment { height: 100%; transition: width 0.3s; }
         
-        /* Grille des boutons adaptative */
-        .controls-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1.5vmin; margin-bottom: 2vmin; width: 100%; }
-        .p-btn { border: 1px solid var(--border); background: transparent; color: var(--muted); padding: 2vmin 0; border-radius: 1.5vmin; cursor: pointer; font-size: 3vmin; transition: all 0.2s; font-weight: bold; min-width: 0; }
+        /* Grille des boutons adaptative et débloquée */
+        .controls-grid { 
+            display: grid; 
+            grid-template-columns: repeat(4, minmax(0, 1fr)); 
+            gap: 1.5vmin; 
+            margin-bottom: 2vmin; 
+            width: 100%; 
+        }
+        .p-btn { 
+            border: 1px solid var(--border); 
+            background: transparent; 
+            color: var(--muted); 
+            padding: 2vmin 0; 
+            border-radius: 1.5vmin; 
+            cursor: pointer; 
+            font-size: 3vmin; 
+            transition: all 0.2s; 
+            font-weight: bold; 
+            white-space: nowrap; 
+            overflow: hidden; 
+            text-overflow: ellipsis; 
+        }
         .p-btn.active { color: white; border-color: transparent; }
         body.light-theme .p-btn.active { color: #333; }
 
-        .actions { display: grid; grid-template-columns: 1fr 1fr; gap: 2.5vmin; width: 100%; }
-        button.action { padding: 3vmin; border: 1px solid var(--border); border-radius: 2vmin; font-weight: bold; cursor: pointer; font-size: 3.2vmin; color: var(--text); background: var(--panel); transition: background 0.2s; min-width: 0; }
+        .actions { 
+            display: grid; 
+            grid-template-columns: repeat(2, minmax(0, 1fr)); 
+            gap: 2.5vmin; 
+            width: 100%; 
+        }
+        button.action { 
+            padding: 3vmin; 
+            border: 1px solid var(--border); 
+            border-radius: 2vmin; 
+            font-weight: bold; 
+            cursor: pointer; 
+            font-size: 3.2vmin; 
+            color: var(--text); 
+            background: var(--panel); 
+            transition: background 0.2s; 
+            white-space: nowrap; 
+            overflow: hidden; 
+            text-overflow: ellipsis; 
+        }
         #startStopBtn { background: var(--p4); color: var(--bg); border: none; }
         
-        /* Inputs stylisés */
+        /* Inputs stylisés sans flèches */
         .theme-input {
-            width: 7vmin; 
+            width: 6vmin; 
             background: var(--rem); 
             border: 1px solid var(--border); 
             color: var(--text); 
@@ -117,11 +159,19 @@
             padding: 0.5vmin; 
             font-size: 2.5vmin;
             font-family: inherit;
+            -webkit-appearance: none;
+            -moz-appearance: textfield;
+            margin: 0;
+        }
+        .theme-input::-webkit-outer-spin-button,
+        .theme-input::-webkit-inner-spin-button {
+            -webkit-appearance: none;
+            margin: 0;
         }
 
         /* Interrupteur iOS miniature */
         .switch-container { display: flex; align-items: center; gap: 1vmin; margin-top: 1vmin; }
-        .switch { position: relative; display: inline-block; width: 6vmin; height: 3.5vmin; }
+        .switch { position: relative; display: inline-block; width: 6vmin; height: 3.5vmin; flex-shrink: 0; }
         .switch input { opacity: 0; width: 0; height: 0; }
         .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #444; transition: .3s; border-radius: 3vmin; }
         .slider:before { position: absolute; content: ""; height: 2.5vmin; width: 2.5vmin; left: 0.5vmin; bottom: 0.5vmin; background-color: white; transition: .3s; border-radius: 50%; }
@@ -137,10 +187,10 @@
 
         /* Zone d'analyse */
         .nav-tabs { display: flex; gap: 1.5vmin; margin-bottom: 2vmin; width: 100%; }
-        .nav-btn { flex: 1; padding: 2vmin; font-size: 2.8vmin; background: var(--rem); color: var(--text); border: 1px solid var(--border); border-radius: 1.5vmin; cursor: pointer; font-weight: bold; min-width: 0; }
+        .nav-btn { flex: 1; padding: 2vmin; font-size: 2.8vmin; background: var(--rem); color: var(--text); border: 1px solid var(--border); border-radius: 1.5vmin; cursor: pointer; font-weight: bold; }
         .nav-btn.active { background: var(--p4); color: var(--bg); border: none; }
         
-        .stats-scroll { flex: 1; overflow-y: auto; padding-right: 1vmin; margin-top: 2vmin; display: flex; flex-direction: column; gap: 3vmin; min-width: 0; }
+        .stats-scroll { flex: 1; overflow-y: auto; padding-right: 1vmin; margin-top: 2vmin; display: flex; flex-direction: column; gap: 3vmin; }
         
         /* Conteneurs de graphiques débloqués avec position absolute */
         .canvas-wrapper { 
@@ -148,8 +198,6 @@
             width: 100%; 
             height: 35vmin; 
             flex-shrink: 0; 
-            min-width: 0 !important;
-            min-height: 0 !important;
         }
         .canvas-wrapper canvas {
             position: absolute;
@@ -185,7 +233,7 @@
                 <div id="dayTotal">00:00:00</div>
                 <div id="estimatedEnd">Fin estimée : --:--</div>
             </div>
-            <div style="display: flex; flex-direction: column; align-items: flex-end;">
+            <div style="display: flex; flex-direction: column; align-items: flex-end; flex-shrink: 0;">
                 <div id="timer">00:00:00</div>
                 <!-- Interrupteur iOS thème discret -->
                 <div class="switch-container">
