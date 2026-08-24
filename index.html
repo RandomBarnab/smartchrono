@@ -8,17 +8,40 @@
     <!-- Chart.js pour les graphiques -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
+        /* Variables de Thème (Thème Sombre par défaut) */
         :root { 
             --bg: #121212; 
             --panel: #1e1e1e; 
             --text: #ffffff; 
-            --muted: #888; 
+            --muted: #888888; 
             --p1: #FF4D4D; 
             --p2: #FF9F43; 
             --p3: #F1C40F; 
             --p4: #2ECC71; 
-            --rem: #2c2c2c; /* Couleur du temps restant */
+            --rem: #2c2c2c;
+            --border: #444444;
+            --shadow: 0 12px 36px rgba(0,0,0,0.6);
+            --chart-line: #3498db;
+            --chart-ideal: #777777;
         }
+
+        /* Thème Camouflage (Blanc & Gris) */
+        body.light-theme {
+            --bg: #ffffff;
+            --panel: #ffffff;
+            --text: #8a8a8a;
+            --muted: #cccccc;
+            --p1: #666666; /* Gris foncé */
+            --p2: #949494; /* Gris intermédiaire */
+            --p3: #c2c2c2; /* Gris clair */
+            --p4: #e0e0e0; /* Gris très clair */
+            --rem: #f5f5f5; /* Fond neutre */
+            --border: #eeeeee;
+            --shadow: none; /* Disparition de l'ombre pour fusionner avec le fond */
+            --chart-line: #8a8a8a;
+            --chart-ideal: #dddddd;
+        }
+
         body { 
             font-family: 'Segoe UI', sans-serif; 
             background: var(--bg); 
@@ -32,9 +55,9 @@
             overflow: hidden; 
             box-sizing: border-box;
             padding: 15px;
+            transition: background 0.3s;
         }
         
-        /* Conteneur fluide et adaptatif */
         .app-container { 
             width: 95vw; 
             max-width: 480px; 
@@ -46,19 +69,15 @@
             box-sizing: border-box; 
             display: flex; 
             flex-direction: column;
-            box-shadow: 0 12px 36px rgba(0,0,0,0.6);
+            box-shadow: var(--shadow);
+            border: 1px solid var(--border);
             transition: all 0.3s ease;
         }
         
         @media (max-height: 550px) {
-            .app-container {
-                height: auto;
-                max-height: none;
-                overflow-y: auto;
-            }
+            .app-container { height: auto; max-height: none; overflow-y: auto; }
         }
 
-        /* Vues */
         #mainView { display: flex; flex-direction: column; justify-content: space-between; height: 100%; }
         #statsView { display: none; flex-direction: column; height: 100%; }
 
@@ -66,59 +85,61 @@
         #timer { font-size: 36px; font-weight: bold; font-variant-numeric: tabular-nums; }
         
         /* Barre d'avancement */
-        .progress-wrapper { height: 10px; background: #333; border-radius: 5px; margin: 10px 0; overflow: hidden; display: flex; }
+        .progress-wrapper { height: 10px; background: var(--rem); border-radius: 5px; margin: 10px 0; overflow: hidden; display: flex; }
         .segment { height: 100%; transition: width 0.3s; }
         
         .controls-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-bottom: 15px; }
-        .p-btn { border: 1px solid #444; background: transparent; color: var(--muted); padding: 10px 0; border-radius: 6px; cursor: pointer; font-size: 12px; transition: all 0.2s; }
+        .p-btn { border: 1px solid var(--border); background: transparent; color: var(--muted); padding: 10px 0; border-radius: 6px; cursor: pointer; font-size: 12px; transition: all 0.2s; font-weight: bold; }
         .p-btn.active { color: white; border-color: transparent; }
+        body.light-theme .p-btn.active { color: #333; }
+
         .actions { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-        button.action { padding: 14px; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; font-size: 13px; }
-        #startStopBtn { background: var(--p4); color: white; }
+        button.action { padding: 14px; border: 1px solid var(--border); border-radius: 8px; font-weight: bold; cursor: pointer; font-size: 13px; color: var(--text); background: var(--panel); transition: background 0.2s; }
+        #startStopBtn { background: var(--p4); color: var(--bg); border: none; }
         
-        /* Zone d'analyse */
-        .nav-tabs { display: flex; gap: 6px; margin-bottom: 12px; }
-        .nav-btn { flex: 1; padding: 8px; font-size: 11px; background: #333; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; }
-        .nav-btn.active { background: var(--p4); }
-        
-        .stats-scroll { 
-            flex: 1; 
-            overflow-y: auto; 
-            padding-right: 5px; 
-            margin-top: 10px; 
-            display: flex;
-            flex-direction: column;
-            gap: 15px;
-        }
-        
-        /* Zone des graphiques responsive */
-        .canvas-wrapper {
-            position: relative;
-            width: 100%;
-            height: 180px;
-            flex-shrink: 0;
-        }
-        @media (min-height: 650px) {
-            .canvas-wrapper {
-                height: 220px;
-            }
-        }
-        
-        /* Calendrier adaptatif */
-        .calendar-header { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; text-align: center; font-size: 10px; color: var(--muted); margin-bottom: 6px; }
-        .calendar-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; width: 100%; }
-        .day-cell { position: relative; aspect-ratio: 1; background: #252525; border-radius: 6px; display: flex; flex-direction: column; align-items: center; justify-content: space-between; padding: 4px 0; box-sizing: border-box; }
-        .day-num { font-size: 9px; font-weight: bold; color: #fff; }
-        .mini-pie { width: 18px; height: 18px; border-radius: 50%; background: #333; }
-        
-        @media (min-height: 650px) {
-            .mini-pie { width: 24px; height: 24px; }
-            .day-num { font-size: 11px; }
+        /* Inputs stylisés */
+        .theme-input {
+            width: 32px; 
+            background: var(--rem); 
+            border: 1px solid var(--border); 
+            color: var(--text); 
+            border-radius: 4px; 
+            text-align: center; 
+            padding: 2px; 
+            font-size: 11px;
+            font-family: inherit;
         }
 
-        /* Liste des sessions */
-        .session-item { display: flex; justify-content: space-between; font-size: 11px; border-bottom: 1px solid #333; padding: 6px 0; }
+        /* Interrupteur iOS */
+        .switch-container { display: flex; align-items: center; gap: 6px; margin-top: 5px; }
+        .switch { position: relative; display: inline-block; width: 28px; height: 16px; }
+        .switch input { opacity: 0; width: 0; height: 0; }
+        .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #444; transition: .3s; border-radius: 16px; }
+        .slider:before { position: absolute; content: ""; height: 12px; width: 12px; left: 2px; bottom: 2px; background-color: white; transition: .3s; border-radius: 50%; }
+        input:checked + .slider { background-color: var(--p2); }
+        input:checked + .slider:before { transform: translateX(12px); }
+        body.light-theme .slider { background-color: #ddd; }
+
+        /* Zone d'analyse */
+        .nav-tabs { display: flex; gap: 6px; margin-bottom: 12px; }
+        .nav-btn { flex: 1; padding: 8px; font-size: 11px; background: var(--rem); color: var(--text); border: 1px solid var(--border); border-radius: 6px; cursor: pointer; font-weight: bold; }
+        .nav-btn.active { background: var(--p4); color: var(--bg); border: none; }
+        
+        .stats-scroll { flex: 1; overflow-y: auto; padding-right: 5px; margin-top: 10px; display: flex; flex-direction: column; gap: 15px; }
+        .canvas-wrapper { position: relative; width: 100%; height: 180px; flex-shrink: 0; }
+        @media (min-height: 650px) { .canvas-wrapper { height: 220px; } }
+        
+        /* Calendrier */
+        .calendar-header { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; text-align: center; font-size: 10px; color: var(--muted); margin-bottom: 6px; }
+        .calendar-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; width: 100%; }
+        .day-cell { position: relative; aspect-ratio: 1; background: var(--rem); border-radius: 6px; display: flex; flex-direction: column; align-items: center; justify-content: space-between; padding: 4px 0; box-sizing: border-box; border: 1px solid var(--border); }
+        .day-num { font-size: 9px; font-weight: bold; color: var(--text); }
+        .mini-pie { width: 18px; height: 18px; border-radius: 50%; background: var(--border); }
+        
+        @media (min-height: 650px) { .mini-pie { width: 24px; height: 24px; } .day-num { font-size: 11px; } }
+        .session-item { display: flex; justify-content: space-between; font-size: 11px; border-bottom: 1px solid var(--border); padding: 6px 0; }
         .session-priority { font-weight: bold; padding: 2px 6px; border-radius: 4px; font-size: 9px; color: white; }
+        body.light-theme .session-priority { color: #333; }
     </style>
 </head>
 <body>
@@ -130,24 +151,34 @@
             <div>
                 <div style="font-size: 11px; color: var(--muted); display: flex; align-items: center; gap: 4px;">
                     OBJECTIF 
-                    <input type="number" id="goalInput" min="1" max="24" value="7" style="width: 36px; background: #2a2a2a; border: 1px solid #444; color: white; border-radius: 4px; text-align: center; padding: 2px; font-size: 11px;" onchange="updateGoal(this.value)">H
+                    <input type="number" id="goalInput" min="1" max="24" value="7" class="theme-input" onchange="updateGoal(this.value)">H
                 </div>
                 <div id="dayTotal" style="font-size: 20px; font-weight: bold; margin-top: 4px;">00:00:00</div>
                 <div id="estimatedEnd" style="font-size: 11px; color: var(--muted); margin-top: 4px; font-style: italic;">Fin estimée : --:--</div>
             </div>
-            <div id="timer">00:00:00</div>
+            <div style="display: flex; flex-direction: column; align-items: flex-end;">
+                <div id="timer">00:00:00</div>
+                <!-- Interrupteur iOS thème discret -->
+                <div class="switch-container">
+                    <span style="font-size: 9px; color: var(--muted);">Discret</span>
+                    <label class="switch">
+                        <input type="checkbox" id="themeToggle" onchange="toggleTheme(this.checked)">
+                        <span class="slider"></span>
+                    </label>
+                </div>
+            </div>
         </div>
         <div class="progress-wrapper" id="progressBar"></div>
         <div style="text-align: right; font-size: 11px; color: var(--muted);" id="percText">0%</div>
         <div class="controls-grid" id="priorityGrid">
-            <button class="p-btn" onclick="setPriority(1)" style="--c:var(--p1)">P1</button>
-            <button class="p-btn" onclick="setPriority(2)" style="--c:var(--p2)">P2</button>
-            <button class="p-btn" onclick="setPriority(3)" style="--c:var(--p3)">P3</button>
-            <button class="p-btn active" onclick="setPriority(4)" style="--c:var(--p4)">P4</button>
+            <button class="p-btn" onclick="setPriority(1)">P1</button>
+            <button class="p-btn" onclick="setPriority(2)">P2</button>
+            <button class="p-btn" onclick="setPriority(3)">P3</button>
+            <button class="p-btn active" onclick="setPriority(4)">P4</button>
         </div>
         <div class="actions">
             <button id="startStopBtn" class="action" onclick="toggleTimer()">START</button>
-            <button class="action" onclick="showStats()" style="background:#333; color:white;">ANALYSE</button>
+            <button class="action" onclick="showStats()">ANALYSE</button>
         </div>
     </div>
 
@@ -155,7 +186,7 @@
     <div id="statsView" class="stats-view">
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 12px;">
             <h3 style="margin:0; font-size:18px;">Analyse</h3>
-            <button onclick="hideStats()" style="background:none; border:none; color:white; cursor:pointer; font-size:18px;">✕</button>
+            <button onclick="hideStats()" style="background:none; border:none; color:var(--text); cursor:pointer; font-size:18px;">✕</button>
         </div>
         <div class="nav-tabs">
             <button id="tab-day" class="nav-btn active" onclick="changeView('day')">Jour</button>
@@ -164,9 +195,9 @@
         </div>
         
         <div style="display: flex; gap: 10px; align-items: center; margin-bottom: 12px; flex-shrink: 0;">
-            <input type="date" id="dateSelector" onchange="renderCharts()" style="flex: 1; background:#333; color:white; border:none; padding:6px; border-radius:4px; font-size:11px;">
+            <input type="date" id="dateSelector" onchange="renderCharts()" style="flex: 1; background:var(--rem); color:var(--text); border:1px solid var(--border); padding:6px; border-radius:4px; font-size:11px; font-family: inherit;">
             <div id="startHourContainer" style="font-size:10px; color:var(--muted); white-space:nowrap;">
-                Début : <input type="number" id="startHourInput" min="0" max="23" value="9" style="width:28px; background:#2a2a2a; border:1px solid #444; color:white; border-radius:4px; text-align:center; padding:2px; font-size:10px;" onchange="updateStartHour(this.value)">H
+                Début : <input type="number" id="startHourInput" min="0" max="23" value="9" class="theme-input" style="width:28px;" onchange="updateStartHour(this.value)">H
             </div>
         </div>
         
@@ -197,6 +228,32 @@
 
     document.getElementById('goalInput').value = dailyGoalHours;
     document.getElementById('startHourInput').value = dayStartHour;
+
+    // Récupération des couleurs CSS dynamiquement
+    function getThemeColor(varName) {
+        return getComputedStyle(document.body).getPropertyValue(varName).trim();
+    }
+
+    // Gestion du thème blanc/noir
+    function toggleTheme(isLight) {
+        document.body.classList.toggle('light-theme', isLight);
+        localStorage.setItem('focusTheme', isLight ? 'light' : 'dark');
+        
+        updateDayStats();
+        setPriority(currentPriority);
+        
+        // Actualiser le bouton Start/Stop
+        const btn = document.getElementById('startStopBtn');
+        if (isRunning) {
+            btn.style.background = "#555";
+        } else {
+            btn.style.background = `var(--p${currentPriority})`;
+        }
+
+        if (document.getElementById('statsView').style.display === 'flex') {
+            renderCharts();
+        }
+    }
 
     function updateGoal(val) {
         let parsed = parseInt(val);
@@ -309,18 +366,14 @@
     function getTheoreticalFocusAt(t) {
         if (t <= dayStartHour) return 0;
         let activeWorkTime = 0;
-        let lunchStart = 12.5; // 12h30
-        let lunchEnd = 13.5;   // 13h30
+        let lunchStart = 12.5;
+        let lunchEnd = 13.5;
         let hasLunch = (dayStartHour < lunchStart);
 
         if (hasLunch) {
-            if (t <= lunchStart) {
-                activeWorkTime = t - dayStartHour;
-            } else if (t <= lunchEnd) {
-                activeWorkTime = lunchStart - dayStartHour;
-            } else {
-                activeWorkTime = (t - dayStartHour) - 1.0;
-            }
+            if (t <= lunchStart) activeWorkTime = t - dayStartHour;
+            else if (t <= lunchEnd) activeWorkTime = lunchStart - dayStartHour;
+            else activeWorkTime = (t - dayStartHour) - 1.0;
         } else {
             activeWorkTime = t - dayStartHour;
         }
@@ -346,6 +399,15 @@
         const selectedDateStr = document.getElementById('dateSelector').value || new Date().toISOString().split('T')[0];
         const selectedDate = new Date(selectedDateStr);
 
+        // Couleurs de thème récupérées dynamiquement
+        const colorP1 = getThemeColor('--p1');
+        const colorP2 = getThemeColor('--p2');
+        const colorP3 = getThemeColor('--p3');
+        const colorP4 = getThemeColor('--p4');
+        const colorRem = getThemeColor('--rem');
+        const colorLine = getThemeColor('--chart-line');
+        const colorIdeal = getThemeColor('--chart-ideal');
+
         if (currentView === 'day') {
             sCurveWrapper.style.display = 'block';
             const daySess = sessions.filter(s => new Date(s.date).toISOString().split('T')[0] === selectedDateStr);
@@ -362,34 +424,32 @@
                     labels: ['P1', 'P2', 'P3', 'P4', 'Reste'],
                     datasets: [{
                         data: data.map(s => (s/60).toFixed(1)),
-                        backgroundColor: ['#FF4D4D', '#FF9F43', '#F1C40F', '#2ECC71', '#2c2c2c']
+                        backgroundColor: [colorP1, colorP2, colorP3, colorP4, colorRem]
                     }]
                 },
                 options: { 
                     responsive: true,
                     maintainAspectRatio: false,
-                    plugins: { legend: { position: 'right', labels: { color: 'white', boxWidth: 10, font: { size: 9 } } } } 
+                    plugins: { legend: { position: 'right', labels: { color: getThemeColor('--text'), boxWidth: 10, font: { size: 9 } } } } 
                 }
             });
 
-            // 2. S-Curve (Paliers de 30 minutes)
+            // 2. S-Curve
             const labels = [];
             const theoreticalData = [];
             const actualData = [];
             
             let lunchIncluded = (dayStartHour < 12.5);
             let theoreticalTotalElapsed = dailyGoalHours + (lunchIncluded ? 1 : 0);
-            let endHour = Math.max(dayStartHour + theoreticalTotalElapsed + 0.5, 18); // Demi-heure de marge à la fin
+            let endHour = Math.max(dayStartHour + theoreticalTotalElapsed + 0.5, 18);
 
             for (let t = dayStartHour; t <= endHour; t += 0.5) {
                 let h = Math.floor(t);
                 let m = (t % 1 === 0) ? "00" : "30";
                 labels.push(`${String(h).padStart(2, '0')}:${m}`);
                 
-                // Théorique
                 theoreticalData.push(getTheoreticalFocusAt(t));
 
-                // Réalisé
                 const limitTime = new Date(selectedDate);
                 limitTime.setHours(h, (t % 1 === 0) ? 0 : 30, 0, 0);
                 
@@ -399,7 +459,7 @@
 
                 const now = new Date();
                 if (selectedDate.toDateString() === now.toDateString() && limitTime > now) {
-                    actualData.push(null); // Futur
+                    actualData.push(null);
                 } else {
                     actualData.push(actualSecAtT / 3600);
                 }
@@ -413,8 +473,8 @@
                         {
                             label: 'Réalisé',
                             data: actualData,
-                            borderColor: '#3498db',
-                            backgroundColor: 'rgba(52, 152, 219, 0.1)',
+                            borderColor: colorLine,
+                            backgroundColor: 'rgba(120, 120, 120, 0.05)',
                             borderWidth: 2,
                             fill: true,
                             tension: 0.1,
@@ -423,7 +483,7 @@
                         {
                             label: 'Théorique (Idéal)',
                             data: theoreticalData,
-                            borderColor: '#777',
+                            borderColor: colorIdeal,
                             borderDash: [5, 5],
                             borderWidth: 1.5,
                             fill: false,
@@ -435,11 +495,11 @@
                     responsive: true,
                     maintainAspectRatio: false,
                     scales: {
-                        x: { ticks: { color: 'white', font: { size: 8 } }, grid: { display: false } },
-                        y: { ticks: { color: 'white', font: { size: 8 } }, grid: { color: '#333' }, title: { display: true, text: 'Heures', color: '#888', font: { size: 8 } } }
+                        x: { ticks: { color: getThemeColor('--text'), font: { size: 8 } }, grid: { display: false } },
+                        y: { ticks: { color: getThemeColor('--text'), font: { size: 8 } }, grid: { color: getThemeColor('--border') }, title: { display: true, text: 'Heures', color: getThemeColor('--muted'), font: { size: 8 } } }
                     },
                     plugins: {
-                        legend: { position: 'top', labels: { color: 'white', boxWidth: 10, font: { size: 8 } } }
+                        legend: { position: 'top', labels: { color: getThemeColor('--text'), boxWidth: 10, font: { size: 8 } } }
                     }
                 }
             });
@@ -483,18 +543,18 @@
                 data: {
                     labels: labels,
                     datasets: [
-                        { label: 'P1', data: dataP1, backgroundColor: '#FF4D4D' },
-                        { label: 'P2', data: dataP2, backgroundColor: '#FF9F43' },
-                        { label: 'P3', data: dataP3, backgroundColor: '#F1C40F' },
-                        { label: 'P4', data: dataP4, backgroundColor: '#2ECC71' }
+                        { label: 'P1', data: dataP1, backgroundColor: colorP1 },
+                        { label: 'P2', data: dataP2, backgroundColor: colorP2 },
+                        { label: 'P3', data: dataP3, backgroundColor: colorP3 },
+                        { label: 'P4', data: dataP4, backgroundColor: colorP4 }
                     ]
                 },
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
                     scales: {
-                        x: { stacked: true, grid: { display: false }, ticks: { color: 'white', font: { size: 8 } } },
-                        y: { stacked: true, grid: { color: '#333' }, ticks: { color: 'white', font: { size: 8 } } }
+                        x: { stacked: true, grid: { display: false }, ticks: { color: getThemeColor('--text'), font: { size: 8 } } },
+                        y: { stacked: true, grid: { color: getThemeColor('--border') }, ticks: { color: getThemeColor('--text'), font: { size: 8 } } }
                     },
                     plugins: { legend: { display: false } }
                 }
@@ -573,7 +633,15 @@
         document.getElementById('statsView').style.display = 'none';
     }
 
-    setPriority(4); updateDisplay();
+    // Initialisation
+    setPriority(4); 
+    updateDisplay();
+
+    // Chargement du thème sauvegardé
+    const savedTheme = localStorage.getItem('focusTheme') || 'dark';
+    const isLight = savedTheme === 'light';
+    document.getElementById('themeToggle').checked = isLight;
+    toggleTheme(isLight);
 </script>
 </body>
 </html>
