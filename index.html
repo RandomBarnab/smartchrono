@@ -2,6 +2,7 @@
 <html lang="fr">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Focus Meter Pro</title>
     <!-- Favicon intégré -->
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><circle cx='50' cy='50' r='40' fill='none' stroke='%23ffffff' stroke-width='8'/><line x1='50' y1='50' x2='50' y2='30' stroke='%23ffffff' stroke-width='8'/></svg>">
@@ -23,27 +24,29 @@
             --shadow: 0 12px 36px rgba(0,0,0,0.6);
             --chart-line: #3498db;
             --chart-ideal: #777777;
+            --input-bg: #2a2a2a;
         }
 
         /* Thème Camouflage (Blanc & Gris) */
         body.light-theme {
             --bg: #ffffff;
             --panel: #ffffff;
-            --text: #8a8a8a;
-            --muted: #cccccc;
-            --p1: #666666; 
-            --p2: #949494; 
-            --p3: #c2c2c2; 
-            --p4: #e0e0e0; 
+            --text: #5a5a5a;
+            --muted: #aaaaaa;
+            --p1: #555555; 
+            --p2: #808080; 
+            --p3: #b0b0b0; 
+            --p4: #dadada; 
             --rem: #f5f5f5; 
-            --border: #eeeeee;
+            --border: #e5e5e5;
             --shadow: none; 
-            --chart-line: #8a8a8a;
-            --chart-ideal: #dddddd;
+            --chart-line: #666666;
+            --chart-ideal: #cccccc;
+            --input-bg: #f9f9f5;
         }
 
         body { 
-            font-family: 'Segoe UI', sans-serif; 
+            font-family: 'Segoe UI', -apple-system, sans-serif; 
             background: var(--bg); 
             color: var(--text); 
             margin: 0; 
@@ -53,100 +56,101 @@
             height: 100vh; 
             width: 100vw;
             overflow: hidden; 
-            box-sizing: border-box;
             padding: 10px;
+            box-sizing: border-box;
             transition: background 0.3s;
         }
         
-        /* Conteneur fluide en hauteur, stable en largeur */
+        /* Conteneur Verrouillé (Évite les déformations sur grand écran et Safari) */
         .app-container { 
             width: 100%; 
-            max-width: 350px; 
+            max-width: 360px; 
             height: 100%; 
-            max-height: 100vh;
+            max-height: 630px;
             background: var(--panel); 
             border-radius: 16px; 
-            padding: 18px; 
+            padding: 16px; 
             box-sizing: border-box; 
             display: flex; 
             flex-direction: column;
             justify-content: space-between;
             box-shadow: var(--shadow);
             border: 1px solid var(--border);
-            transition: all 0.3s ease;
             overflow: hidden;
+            position: relative;
         }
 
-        #mainView { display: flex; flex-direction: column; justify-content: space-between; height: 100%; gap: 10px; }
-        #statsView { display: none; flex-direction: column; height: 100%; gap: 10px; }
+        #mainView, #statsView { 
+            display: flex; 
+            flex-direction: column; 
+            justify-content: space-between; 
+            height: 100%; 
+            width: 100%; 
+            gap: 12px;
+        }
+        #statsView { display: none; }
 
+        /* Timer Section */
         .timer-row { display: flex; align-items: center; justify-content: space-between; width: 100%; }
-        
-        /* Polices adaptatives intelligentes (ne descendent jamais sous un seuil lisible) */
-        #timer { 
-            font-size: clamp(28px, 6.5vh, 38px); 
-            font-weight: bold; 
-            font-variant-numeric: tabular-nums; 
-            line-height: 1.1;
-        }
-        
-        #dayTotal { font-size: clamp(15px, 3vh, 18px); font-weight: bold; margin-top: 2px; }
-        #estimatedEnd { font-size: clamp(9px, 2vh, 11px); color: var(--muted); margin-top: 2px; font-style: italic; }
+        #timer { font-size: 34px; font-weight: bold; font-variant-numeric: tabular-nums; line-height: 1; }
+        #dayTotal { font-size: 16px; font-weight: bold; margin-top: 2px; }
+        #estimatedEnd { font-size: 10px; color: var(--muted); margin-top: 2px; font-style: italic; }
         
         /* Barre d'avancement */
-        .progress-wrapper { height: clamp(6px, 1.5vh, 9px); background: var(--rem); border-radius: 4px; margin: 8px 0; overflow: hidden; display: flex; width: 100%; }
+        .progress-wrapper { height: 6px; background: var(--rem); border-radius: 3px; overflow: hidden; display: flex; width: 100%; }
         .segment { height: 100%; transition: width 0.3s; }
         
-        .controls-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 5px; width: 100%; }
-        .p-btn { border: 1px solid var(--border); background: transparent; color: var(--muted); padding: clamp(6px, 1.5vh, 10px) 0; border-radius: 5px; cursor: pointer; font-size: clamp(10px, 2vh, 11px); transition: all 0.2s; font-weight: bold; }
+        /* Boutons de priorité */
+        .controls-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; width: 100%; }
+        .p-btn { border: 1px solid var(--border); background: transparent; color: var(--muted); padding: 6px 0; border-radius: 4px; cursor: pointer; font-size: 10px; transition: all 0.2s; font-weight: bold; }
         .p-btn.active { color: white; border-color: transparent; }
         body.light-theme .p-btn.active { color: #333; }
 
-        .actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; width: 100%; }
-        button.action { padding: clamp(10px, 2vh, 14px); border: 1px solid var(--border); border-radius: 6px; font-weight: bold; cursor: pointer; font-size: clamp(11px, 2vh, 13px); color: var(--text); background: var(--panel); }
+        /* Configuration rapide */
+        .settings-row { display: flex; justify-content: space-between; align-items: center; font-size: 10px; color: var(--muted); gap: 6px; }
+        .theme-input { width: 30px; background: var(--input-bg); border: 1px solid var(--border); color: var(--text); border-radius: 4px; text-align: center; padding: 2px; font-size: 10px; }
+
+        /* TODO List Section */
+        .todo-section { flex: 1; display: flex; flex-direction: column; min-height: 0; border-top: 1px solid var(--border); padding-top: 8px; }
+        .todo-header { display: flex; justify-content: space-between; align-items: center; font-size: 11px; font-weight: bold; margin-bottom: 6px; }
+        .todo-input-container { display: flex; gap: 4px; margin-bottom: 6px; }
+        .todo-input { flex: 1; background: var(--input-bg); border: 1px solid var(--border); color: var(--text); padding: 4px 8px; border-radius: 4px; font-size: 11px; }
+        .todo-list { flex: 1; overflow-y: auto; list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 4px; }
+        
+        .todo-item { display: flex; align-items: center; justify-content: space-between; background: var(--rem); padding: 6px; border-radius: 4px; border: 1px solid transparent; font-size: 11px; cursor: pointer; }
+        .todo-item.active-task { border-color: var(--chart-line); }
+        .todo-item.completed span { text-decoration: line-through; color: var(--muted); }
+        .todo-left { display: flex; align-items: center; gap: 6px; overflow: hidden; }
+        .todo-text { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+        /* Actions Footer */
+        .actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; width: 100%; }
+        button.action { padding: 10px; border: 1px solid var(--border); border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 12px; color: var(--text); background: var(--panel); }
         #startStopBtn { background: var(--p4); color: var(--bg); border: none; }
         
-        /* Inputs */
-        .theme-input {
-            width: 28px; 
-            background: var(--rem); 
-            border: 1px solid var(--border); 
-            color: var(--text); 
-            border-radius: 4px; 
-            text-align: center; 
-            padding: 2px; 
-            font-size: 11px;
-            font-family: inherit;
-        }
-
         /* Interrupteur iOS */
-        .switch-container { display: flex; align-items: center; gap: 6px; margin-top: 4px; }
-        .switch { position: relative; display: inline-block; width: 26px; height: 15px; }
+        .switch-container { display: flex; align-items: center; gap: 4px; }
+        .switch { position: relative; display: inline-block; width: 24px; height: 14px; }
         .switch input { opacity: 0; width: 0; height: 0; }
-        .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #444; transition: .3s; border-radius: 16px; }
-        .slider:before { position: absolute; content: ""; height: 11px; width: 11px; left: 2px; bottom: 2px; background-color: white; transition: .3s; border-radius: 50%; }
+        .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #444; transition: .3s; border-radius: 14px; }
+        .slider:before { position: absolute; content: ""; height: 10px; width: 11px; left: 2px; bottom: 2px; background-color: white; transition: .3s; border-radius: 50%; }
         input:checked + .slider { background-color: var(--p2); }
-        input:checked + .slider:before { transform: translateX(11px); }
+        input:checked + .slider:before { transform: translateX(10px); }
         body.light-theme .slider { background-color: #ddd; }
 
-        /* Zone d'analyse */
-        .nav-tabs { display: flex; gap: 5px; margin-bottom: 5px; width: 100%; }
-        .nav-btn { flex: 1; padding: 6px; font-size: 10px; background: var(--rem); color: var(--text); border: 1px solid var(--border); border-radius: 4px; cursor: pointer; font-weight: bold; }
+        /* Analyses */
+        .nav-tabs { display: flex; gap: 4px; width: 100%; }
+        .nav-btn { flex: 1; padding: 5px; font-size: 9px; background: var(--rem); color: var(--text); border: 1px solid var(--border); border-radius: 4px; cursor: pointer; font-weight: bold; }
         .nav-btn.active { background: var(--p4); color: var(--bg); border: none; }
-        
-        .stats-scroll { flex: 1; overflow-y: auto; padding-right: 5px; display: flex; flex-direction: column; gap: 15px; }
-        .canvas-wrapper { position: relative; width: 100%; height: clamp(120px, 25vh, 160px); flex-shrink: 0; }
+        .stats-scroll { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; }
+        .canvas-wrapper { position: relative; width: 100%; height: 130px; flex-shrink: 0; }
         
         /* Calendrier */
-        .calendar-header { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; text-align: center; font-size: 9px; color: var(--muted); margin-bottom: 4px; }
-        .calendar-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; width: 100%; }
-        .day-cell { position: relative; aspect-ratio: 1; background: var(--rem); border-radius: 4px; display: flex; flex-direction: column; align-items: center; justify-content: space-between; padding: 2px 0; box-sizing: border-box; border: 1px solid var(--border); }
+        .calendar-header { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; text-align: center; font-size: 8px; color: var(--muted); margin-bottom: 2px; }
+        .calendar-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 3px; width: 100%; }
+        .day-cell { position: relative; aspect-ratio: 1; background: var(--rem); border-radius: 4px; display: flex; flex-direction: column; align-items: center; justify-content: space-between; padding: 1px 0; box-sizing: border-box; border: 1px solid var(--border); }
         .day-num { font-size: 8px; font-weight: bold; color: var(--text); }
-        .mini-pie { width: 14px; height: 14px; border-radius: 50%; background: var(--border); }
-        
-        .session-item { display: flex; justify-content: space-between; font-size: 11px; border-bottom: 1px solid var(--border); padding: 5px 0; }
-        .session-priority { font-weight: bold; padding: 2px 5px; border-radius: 4px; font-size: 9px; color: white; }
-        body.light-theme .session-priority { color: #333; }
+        .mini-pie { width: 12px; height: 12px; border-radius: 50%; background: var(--border); }
     </style>
 </head>
 <body>
@@ -157,43 +161,67 @@
         <div class="timer-row">
             <div>
                 <div style="font-size: 10px; color: var(--muted); display: flex; align-items: center; gap: 4px;">
-                    OBJECTIF 
-                    <input type="number" id="goalInput" min="1" max="24" value="7" class="theme-input" onchange="updateGoal(this.value)">H
+                    OBJ : <input type="number" id="goalInput" min="1" max="24" value="7" class="theme-input" onchange="updateGoal(this.value)">H
                 </div>
                 <div id="dayTotal">00:00:00</div>
                 <div id="estimatedEnd">Fin estimée : --:--</div>
             </div>
             <div style="display: flex; flex-direction: column; align-items: flex-end;">
                 <div id="timer">00:00:00</div>
-                <!-- Interrupteur iOS thème discret -->
                 <div class="switch-container">
-                    <span style="font-size: 9px; color: var(--muted);">Discret</span>
-                    <label class="switch">
-                        <input type="checkbox" id="themeToggle" onchange="toggleTheme(this.checked)">
-                        <span class="slider"></span>
-                    </label>
+                    <span style="font-size: 8px; color: var(--muted);">Discret</span>
+                    <label class="switch"><input type="checkbox" id="themeToggle" onchange="toggleTheme(this.checked)"><span class="slider"></span></label>
                 </div>
             </div>
         </div>
+
         <div class="progress-wrapper" id="progressBar"></div>
-        <div style="text-align: right; font-size: 10px; color: var(--muted);" id="percText">0%</div>
+        <div style="display:flex; justify-content:space-between; font-size: 9px; color: var(--muted);" id="percRow">
+            <span id="loadIndicator"></span>
+            <span id="percText">0%</span>
+        </div>
+
+        <!-- Configuration de l'efficacité de concentration -->
+        <div class="settings-row">
+            <div>Concentration : <input type="number" id="ratioInput" min="50" max="100" value="90" class="theme-input" style="width:34px;" onchange="updateRatio(this.value)">%</div>
+            <div>Priorité : <span id="activePriorityLabel" style="font-weight:bold; color:var(--p4);">P4</span></div>
+        </div>
+
         <div class="controls-grid" id="priorityGrid">
             <button class="p-btn" onclick="setPriority(1)">P1</button>
             <button class="p-btn" onclick="setPriority(2)">P2</button>
             <button class="p-btn" onclick="setPriority(3)">P3</button>
             <button class="p-btn active" onclick="setPriority(4)">P4</button>
         </div>
+
+        <!-- TO-DO LIST -->
+        <div class="todo-section">
+            <div class="todo-header">
+                <span>Ma To-Do</span>
+                <span id="todoTotalTime" style="font-weight: normal; color: var(--muted);">Est: 0h</span>
+            </div>
+            <div class="todo-input-container">
+                <input type="text" id="todoTextInput" placeholder="Nouvelle tâche..." class="todo-input">
+                <select id="todoPriorityInput" class="theme-input" style="width: 40px;">
+                    <option value="1">P1</option><option value="2">P2</option><option value="3">P3</option><option value="4" selected>P4</option>
+                </select>
+                <input type="number" id="todoEstInput" placeholder="Est. (h)" min="0.5" step="0.5" class="theme-input" style="width: 45px;">
+                <button onclick="addTodo()" class="action" style="padding:4px 8px; font-size:11px;">+</button>
+            </div>
+            <ul class="todo-list" id="todoList"></ul>
+        </div>
+
         <div class="actions">
             <button id="startStopBtn" class="action" onclick="toggleTimer()">START</button>
             <button class="action" onclick="showStats()">ANALYSE</button>
         </div>
     </div>
 
-    <!-- VUE STATS -->
-    <div id="statsView" class="stats-view">
+    <!-- VUE ANALYSE -->
+    <div id="statsView">
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 5px;">
-            <h3 style="margin:0; font-size:16px;">Analyse</h3>
-            <button onclick="hideStats()" style="background:none; border:none; color:var(--text); cursor:pointer; font-size:16px;">✕</button>
+            <h3 style="margin:0; font-size:14px;">Analyse</h3>
+            <button onclick="hideStats()" style="background:none; border:none; color:var(--text); cursor:pointer; font-size:14px;">✕</button>
         </div>
         <div class="nav-tabs">
             <button id="tab-day" class="nav-btn active" onclick="changeView('day')">Jour</button>
@@ -201,25 +229,18 @@
             <button id="tab-month" class="nav-btn" onclick="changeView('month')">Mois</button>
         </div>
         
-        <div style="display: flex; gap: 10px; align-items: center; margin-bottom: 5px; flex-shrink: 0;">
-            <input type="date" id="dateSelector" onchange="renderCharts()" style="flex: 1; background:var(--rem); color:var(--text); border:1px solid var(--border); padding:5px; border-radius:4px; font-size:11px; font-family: inherit;">
-            <div id="startHourContainer" style="font-size:10px; color:var(--muted); white-space:nowrap;">
-                Début : <input type="number" id="startHourInput" min="0" max="23" value="9" class="theme-input" style="width:25px;" onchange="updateStartHour(this.value)">H
+        <div style="display: flex; gap: 6px; align-items: center; margin-bottom: 4px; flex-shrink: 0;">
+            <input type="date" id="dateSelector" onchange="renderCharts()" style="flex: 1; background:var(--rem); color:var(--text); border:1px solid var(--border); padding:4px; border-radius:4px; font-size:10px; font-family: inherit;">
+            <div id="startHourContainer" style="font-size:9px; color:var(--muted); white-space:nowrap;">
+                Début : <input type="number" id="startHourInput" min="0" max="23" value="9" class="theme-input" style="width:24px;" onchange="updateStartHour(this.value)">H
             </div>
         </div>
         
         <div class="stats-scroll">
-            <div class="canvas-wrapper" id="pieWrapper">
-                <canvas id="myChart"></canvas>
-            </div>
-            <div class="canvas-wrapper" id="sCurveWrapper">
-                <canvas id="sCurveChart"></canvas>
-            </div>
-            
+            <div class="canvas-wrapper" id="pieWrapper"><canvas id="myChart"></canvas></div>
+            <div class="canvas-wrapper" id="sCurveWrapper"><canvas id="sCurveChart"></canvas></div>
             <div id="calendarContainer" style="display:none; width: 100%;">
-                <div class="calendar-header">
-                    <span>Lu</span><span>Ma</span><span>Me</span><span>Je</span><span>Ve</span><span>Sa</span><span>Di</span>
-                </div>
+                <div class="calendar-header"><span>Lu</span><span>Ma</span><span>Me</span><span>Je</span><span>Ve</span><span>Sa</span><span>Di</span></div>
                 <div id="monthGrid" class="calendar-grid"></div>
             </div>
             <div id="sessionsListContainer"></div>
@@ -228,75 +249,137 @@
 </div>
 
 <script>
-    let timerInterval, startTime, elapsed = 0, isRunning = false, currentPriority = 4, currentView = 'day', myChart = null, sCurveChart = null;
+    let timerInterval, startTime, elapsed = 0, isRunning = false, currentPriority = 4;
+    let currentView = 'day', myChart = null, sCurveChart = null;
+    
     let sessions = JSON.parse(localStorage.getItem('focusSessions') || '[]');
     let dailyGoalHours = parseInt(localStorage.getItem('focusDailyGoal') || '7');
     let dayStartHour = parseInt(localStorage.getItem('focusStartHour') || '9');
+    let concentrationRatio = parseInt(localStorage.getItem('focusRatio') || '90') / 100;
+    let todos = JSON.parse(localStorage.getItem('focusTodos') || '[]');
+    let activeTodoId = localStorage.getItem('focusActiveTodoId') || null;
 
     document.getElementById('goalInput').value = dailyGoalHours;
     document.getElementById('startHourInput').value = dayStartHour;
+    document.getElementById('ratioInput').value = Math.round(concentrationRatio * 100);
 
-    // Récupération des couleurs CSS dynamiquement
-    function getThemeColor(varName) {
-        return getComputedStyle(document.body).getPropertyValue(varName).trim();
-    }
+    function getThemeColor(v) { return getComputedStyle(document.body).getPropertyValue(v).trim(); }
 
-    // Gestion du thème blanc/noir
     function toggleTheme(isLight) {
         document.body.classList.toggle('light-theme', isLight);
         localStorage.setItem('focusTheme', isLight ? 'light' : 'dark');
-        
         updateDayStats();
         setPriority(currentPriority);
-        
-        // Actualiser le bouton Start/Stop
-        const btn = document.getElementById('startStopBtn');
-        if (isRunning) {
-            btn.style.background = "#555";
-        } else {
-            btn.style.background = `var(--p${currentPriority})`;
-        }
-
-        if (document.getElementById('statsView').style.display === 'flex') {
-            renderCharts();
-        }
+        if (document.getElementById('statsView').style.display === 'flex') renderCharts();
     }
 
     function updateGoal(val) {
-        let parsed = parseInt(val);
-        if (isNaN(parsed) || parsed < 1) parsed = 1;
-        if (parsed > 24) parsed = 24;
-        dailyGoalHours = parsed;
-        localStorage.setItem('focusDailyGoal', parsed);
-        document.getElementById('goalInput').value = parsed;
+        dailyGoalHours = Math.max(1, Math.min(24, parseInt(val) || 7));
+        localStorage.setItem('focusDailyGoal', dailyGoalHours);
+        updateDayStats();
+    }
+
+    function updateRatio(val) {
+        let r = Math.max(50, Math.min(100, parseInt(val) || 90));
+        concentrationRatio = r / 100;
+        localStorage.setItem('focusRatio', r);
         updateDayStats();
     }
 
     function updateStartHour(val) {
-        let parsed = parseInt(val);
-        if (isNaN(parsed) || parsed < 0) parsed = 0;
-        if (parsed > 23) parsed = 23;
-        dayStartHour = parsed;
-        localStorage.setItem('focusStartHour', parsed);
-        document.getElementById('startHourInput').value = parsed;
+        dayStartHour = Math.max(0, Math.min(23, parseInt(val) || 9));
+        localStorage.setItem('focusStartHour', dayStartHour);
         if (currentView === 'day') renderCharts();
-    }
-
-    function formatDuration(sec) {
-        const h = Math.floor(sec / 3600);
-        const m = Math.floor((sec % 3600) / 60);
-        if (h > 0) return `${h}h ${m}m`;
-        return `${m}m ${Math.floor(sec % 60)}s`;
     }
 
     function setPriority(p) {
         currentPriority = p;
+        document.getElementById('activePriorityLabel').textContent = 'P' + p;
+        document.getElementById('activePriorityLabel').style.color = `var(--p${p})`;
         document.querySelectorAll('.p-btn').forEach((b, i) => {
             b.classList.toggle('active', i+1 === p);
             b.style.backgroundColor = (i+1 === p) ? `var(--p${p})` : 'transparent';
         });
     }
 
+    // --- TO-DO LIST ENGINE ---
+    function renderTodos() {
+        const list = document.getElementById('todoList');
+        list.innerHTML = '';
+        let estSum = 0;
+
+        todos.forEach(t => {
+            if (!t.completed) estSum += t.estimate;
+            const li = document.createElement('li');
+            li.className = `todo-item ${t.completed ? 'completed' : ''} ${t.id == activeTodoId ? 'active-task' : ''}`;
+            li.onclick = () => selectTodo(t.id);
+
+            li.innerHTML = `
+                <div class="todo-left">
+                    <input type="checkbox" ${t.completed ? 'checked' : ''} onclick="event.stopPropagation(); toggleTodoDone('${t.id}')">
+                    <span class="todo-text">${t.text}</span>
+                </div>
+                <div style="display:flex; align-items:center; gap:6px;">
+                    <span class="session-priority" style="background:var(--p${t.priority})">P${t.priority}</span>
+                    <span style="font-size:10px; color:var(--muted)">${t.completed ? t.worked.toFixed(1) : t.estimate}h</span>
+                    <button onclick="event.stopPropagation(); deleteTodo('${t.id}')" style="background:none; border:none; color:var(--p1); cursor:pointer; font-weight:bold;">✕</button>
+                </div>
+            `;
+            list.appendChild(li);
+        });
+
+        document.getElementById('todoTotalTime').textContent = `Est: ${estSum.toFixed(1)}h`;
+        const loadEl = document.getElementById('loadIndicator');
+        if (estSum > dailyGoalHours * 0.9) {
+            loadEl.innerHTML = `<span style="color:var(--p2); font-weight:bold;">⚠️ Charge (${Math.round(estSum/dailyGoalHours*100)}%)</span>`;
+        } else {
+            loadEl.innerHTML = '';
+        }
+    }
+
+    function addTodo() {
+        const txt = document.getElementById('todoTextInput').value.trim();
+        const est = parseFloat(document.getElementById('todoEstInput').value) || 1.0;
+        const p = parseInt(document.getElementById('todoPriorityInput').value);
+        if (!txt) return;
+
+        todos.push({ id: Date.now().toString(), text: txt, priority: p, estimate: est, worked: 0, completed: false });
+        localStorage.setItem('focusTodos', JSON.stringify(todos));
+        document.getElementById('todoTextInput').value = '';
+        document.getElementById('todoEstInput').value = '';
+        renderTodos();
+    }
+
+    function toggleTodoDone(id) {
+        const t = todos.find(t => t.id === id);
+        if (t) {
+            t.completed = !t.completed;
+            if (t.completed && activeTodoId === id) activeTodoId = null;
+            localStorage.setItem('focusTodos', JSON.stringify(todos));
+            localStorage.setItem('focusActiveTodoId', activeTodoId);
+            renderTodos();
+        }
+    }
+
+    function deleteTodo(id) {
+        todos = todos.filter(t => t.id !== id);
+        if (activeTodoId === id) activeTodoId = null;
+        localStorage.setItem('focusTodos', JSON.stringify(todos));
+        localStorage.setItem('focusActiveTodoId', activeTodoId);
+        renderTodos();
+    }
+
+    function selectTodo(id) {
+        const t = todos.find(t => t.id === id);
+        if (t && !t.completed) {
+            activeTodoId = (activeTodoId === id) ? null : id;
+            localStorage.setItem('focusActiveTodoId', activeTodoId);
+            if (activeTodoId) setPriority(t.priority);
+            renderTodos();
+        }
+    }
+
+    // --- TIMER ENGINE ---
     function toggleTimer() {
         const btn = document.getElementById('startStopBtn');
         if (!isRunning) {
@@ -305,9 +388,18 @@
             btn.textContent = "STOP"; btn.style.background = "#555"; isRunning = true;
         } else {
             clearInterval(timerInterval); isRunning = false;
-            sessions.push({ date: Date.now(), duration: elapsed / 1000, priority: currentPriority });
+            let durationSec = elapsed / 1000;
+            sessions.push({ date: Date.now(), duration: durationSec, priority: currentPriority });
             localStorage.setItem('focusSessions', JSON.stringify(sessions));
+            
+            if (activeTodoId) {
+                const t = todos.find(t => t.id === activeTodoId);
+                if (t) t.worked += durationSec / 3600;
+                localStorage.setItem('focusTodos', JSON.stringify(todos));
+            }
+            
             elapsed = 0; updateDisplay(); btn.textContent = "START"; btn.style.background = `var(--p${currentPriority})`;
+            renderTodos();
         }
     }
 
@@ -329,6 +421,7 @@
         const goalSeconds = dailyGoalHours * 3600;
         document.getElementById('percText').textContent = Math.min((totalSec / goalSeconds) * 100, 100).toFixed(1) + "%";
         
+        // Estimation dynamique de fin de journée avec Ratio de Concentration
         const remainingSec = Math.max(0, goalSeconds - totalSec);
         const estEndEl = document.getElementById('estimatedEnd');
         
@@ -336,17 +429,18 @@
             estEndEl.textContent = "Objectif atteint !";
         } else {
             const now = new Date();
-            let estimatedEndTime = new Date(now.getTime() + remainingSec * 1000);
+            // Temps réel requis basé sur le ratio d'efficacité
+            const realRemainingSec = remainingSec / concentrationRatio;
+            let estimatedEndTime = new Date(now.getTime() + realRemainingSec * 1000);
             
+            // Intégration de la pause dej
             const lunchLimit = new Date(now);
             lunchLimit.setHours(12, 30, 0, 0);
-            
             if (now < lunchLimit && estimatedEndTime > lunchLimit) {
                 estimatedEndTime = new Date(estimatedEndTime.getTime() + 3600 * 1000);
             }
             
-            const timeStr = estimatedEndTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-            estEndEl.textContent = `Fin estimée : ${timeStr}`;
+            estEndEl.textContent = `Fin estimée : ${estimatedEndTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
         }
 
         const bar = document.getElementById('progressBar');
@@ -361,11 +455,10 @@
         });
     }
 
+    // --- ANALYSE & CHARTS ENGINE ---
     function changeView(view) {
         currentView = view;
-        document.querySelectorAll('.nav-btn').forEach(b => {
-            b.classList.toggle('active', b.id === `tab-${view}`);
-        });
+        document.querySelectorAll('.nav-btn').forEach(b => b.classList.toggle('active', b.id === `tab-${view}`));
         document.getElementById('startHourContainer').style.display = (view === 'day') ? 'block' : 'none';
         renderCharts();
     }
@@ -373,8 +466,7 @@
     function getTheoreticalFocusAt(t) {
         if (t <= dayStartHour) return 0;
         let activeWorkTime = 0;
-        let lunchStart = 12.5;
-        let lunchEnd = 13.5;
+        let lunchStart = 12.5; let lunchEnd = 13.5;
         let hasLunch = (dayStartHour < lunchStart);
 
         if (hasLunch) {
@@ -384,7 +476,8 @@
         } else {
             activeWorkTime = t - dayStartHour;
         }
-        return Math.max(0, Math.min(dailyGoalHours, activeWorkTime));
+        // Le focus théorique accumulé dépend de notre ratio de concentration
+        return Math.max(0, Math.min(dailyGoalHours, activeWorkTime * concentrationRatio));
     }
 
     function renderCharts() {
@@ -406,13 +499,9 @@
         const selectedDateStr = document.getElementById('dateSelector').value || new Date().toISOString().split('T')[0];
         const selectedDate = new Date(selectedDateStr);
 
-        // Couleurs de thème récupérées dynamiquement
-        const colorP1 = getThemeColor('--p1');
-        const colorP2 = getThemeColor('--p2');
-        const colorP3 = getThemeColor('--p3');
-        const colorP4 = getThemeColor('--p4');
-        const colorRem = getThemeColor('--rem');
-        const colorLine = getThemeColor('--chart-line');
+        const colorP1 = getThemeColor('--p1'); const colorP2 = getThemeColor('--p2');
+        const colorP3 = getThemeColor('--p3'); const colorP4 = getThemeColor('--p4');
+        const colorRem = getThemeColor('--rem'); const colorLine = getThemeColor('--chart-line');
         const colorIdeal = getThemeColor('--chart-ideal');
 
         if (currentView === 'day') {
@@ -421,51 +510,36 @@
             const data = [1,2,3,4].map(p => daySess.filter(s => s.priority === p).reduce((a,s) => a+s.duration, 0));
             const totalWorked = data.reduce((a,b)=>a+b,0);
             const goalSeconds = dailyGoalHours * 3600;
-            const remaining = Math.max(0, goalSeconds - totalWorked);
-            data.push(remaining);
+            data.push(Math.max(0, goalSeconds - totalWorked));
 
-            // 1. Camembert
             myChart = new Chart(ctx, {
                 type: 'pie',
                 data: {
                     labels: ['P1', 'P2', 'P3', 'P4', 'Reste'],
-                    datasets: [{
-                        data: data.map(s => (s/60).toFixed(1)),
-                        backgroundColor: [colorP1, colorP2, colorP3, colorP4, colorRem]
-                    }]
+                    datasets: [{ data: data.map(s => (s/60).toFixed(1)), backgroundColor: [colorP1, colorP2, colorP3, colorP4, colorRem] }]
                 },
-                options: { 
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: { legend: { position: 'right', labels: { color: getThemeColor('--text'), boxWidth: 10, font: { size: 9 } } } } 
-                }
+                options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'right', labels: { color: getThemeColor('--text'), boxWidth: 8, font: { size: 8 } } } } }
             });
 
-            // 2. S-Curve
+            // S-Curve à pente dynamique ajustée au Ratio de Concentration
             const labels = [];
             const theoreticalData = [];
             const actualData = [];
-            
             let lunchIncluded = (dayStartHour < 12.5);
-            let theoreticalTotalElapsed = dailyGoalHours + (lunchIncluded ? 1 : 0);
+            // La journée se finit plus tard en fonction du ratio d'efficacité
+            let theoreticalTotalElapsed = (dailyGoalHours / concentrationRatio) + (lunchIncluded ? 1 : 0);
             let endHour = Math.max(dayStartHour + theoreticalTotalElapsed + 0.5, 18);
 
             for (let t = dayStartHour; t <= endHour; t += 0.5) {
-                let h = Math.floor(t);
-                let m = (t % 1 === 0) ? "00" : "30";
+                let h = Math.floor(t); let m = (t % 1 === 0) ? "00" : "30";
                 labels.push(`${String(h).padStart(2, '0')}:${m}`);
-                
                 theoreticalData.push(getTheoreticalFocusAt(t));
 
                 const limitTime = new Date(selectedDate);
                 limitTime.setHours(h, (t % 1 === 0) ? 0 : 30, 0, 0);
-                
-                const actualSecAtT = daySess
-                    .filter(s => new Date(s.date) <= limitTime)
-                    .reduce((sum, s) => sum + s.duration, 0);
+                const actualSecAtT = daySess.filter(s => new Date(s.date) <= limitTime).reduce((sum, s) => sum + s.duration, 0);
 
-                const now = new Date();
-                if (selectedDate.toDateString() === now.toDateString() && limitTime > now) {
+                if (selectedDate.toDateString() === new Date().toDateString() && limitTime > new Date()) {
                     actualData.push(null);
                 } else {
                     actualData.push(actualSecAtT / 3600);
@@ -477,68 +551,28 @@
                 data: {
                     labels: labels,
                     datasets: [
-                        {
-                            label: 'Réalisé',
-                            data: actualData,
-                            borderColor: colorLine,
-                            backgroundColor: 'rgba(120, 120, 120, 0.05)',
-                            borderWidth: 2,
-                            fill: true,
-                            tension: 0.1,
-                            spanGaps: false
-                        },
-                        {
-                            label: 'Théorique (Idéal)',
-                            data: theoreticalData,
-                            borderColor: colorIdeal,
-                            borderDash: [5, 5],
-                            borderWidth: 1.5,
-                            fill: false,
-                            tension: 0
-                        }
+                        { label: 'Réalisé', data: actualData, borderColor: colorLine, backgroundColor: 'rgba(120,120,120,0.05)', borderWidth: 1.5, fill: true, tension: 0.1 },
+                        { label: 'Idéal', data: theoreticalData, borderColor: colorIdeal, borderDash: [4, 4], borderWidth: 1, fill: false, tension: 0 }
                     ]
                 },
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
                     scales: {
-                        x: { ticks: { color: getThemeColor('--text'), font: { size: 8 } }, grid: { display: false } },
-                        y: { ticks: { color: getThemeColor('--text'), font: { size: 8 } }, grid: { color: getThemeColor('--border') }, title: { display: true, text: 'Heures', color: getThemeColor('--muted'), font: { size: 8 } } }
+                        x: { ticks: { color: getThemeColor('--text'), font: { size: 7 } }, grid: { display: false } },
+                        y: { ticks: { color: getThemeColor('--text'), font: { size: 7 } }, grid: { color: getThemeColor('--border') } }
                     },
-                    plugins: {
-                        legend: { position: 'top', labels: { color: getThemeColor('--text'), boxWidth: 10, font: { size: 8 } } }
-                    }
+                    plugins: { legend: { display: false } }
                 }
             });
-
-            // Liste des sessions
-            if (daySess.length > 0) {
-                listContainer.innerHTML = '<h4 style="margin:10px 0 5px 0; font-size:12px;">Sessions du jour</h4>';
-                daySess.forEach((s, idx) => {
-                    const timeStr = new Date(s.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-                    listContainer.innerHTML += `
-                        <div class="session-item">
-                            <span>Session #${idx+1} à ${timeStr}</span>
-                            <span class="session-priority" style="background: var(--p${s.priority})">P${s.priority}</span>
-                            <span>${formatDuration(s.duration)}</span>
-                        </div>`;
-                });
-            } else {
-                listContainer.innerHTML = '<div style="font-size:11px; color:var(--muted); text-align:center;">Aucune session enregistrée pour ce jour.</div>';
-            }
 
         } else if (currentView === 'week') {
             const labels = [];
             const dataP1 = [], dataP2 = [], dataP3 = [], dataP4 = [];
-            
             for (let i = 6; i >= 0; i--) {
-                const d = new Date(selectedDate);
-                d.setDate(selectedDate.getDate() - i);
-                const dStr = d.toDateString();
-                const dayLabel = d.toLocaleDateString([], { weekday: 'short', day: 'numeric' });
-                labels.push(dayLabel);
-
-                const daySess = sessions.filter(s => new Date(s.date).toDateString() === dStr);
+                const d = new Date(selectedDate); d.setDate(selectedDate.getDate() - i);
+                labels.push(d.toLocaleDateString([], { weekday: 'short', day: 'numeric' }));
+                const daySess = sessions.filter(s => new Date(s.date).toDateString() === d.toDateString());
                 dataP1.push(daySess.filter(s => s.priority === 1).reduce((a,s)=>a+s.duration,0)/3600);
                 dataP2.push(daySess.filter(s => s.priority === 2).reduce((a,s)=>a+s.duration,0)/3600);
                 dataP3.push(daySess.filter(s => s.priority === 3).reduce((a,s)=>a+s.duration,0)/3600);
@@ -550,15 +584,12 @@
                 data: {
                     labels: labels,
                     datasets: [
-                        { label: 'P1', data: dataP1, backgroundColor: colorP1 },
-                        { label: 'P2', data: dataP2, backgroundColor: colorP2 },
-                        { label: 'P3', data: dataP3, backgroundColor: colorP3 },
-                        { label: 'P4', data: dataP4, backgroundColor: colorP4 }
+                        { label: 'P1', data: dataP1, backgroundColor: colorP1 }, { label: 'P2', data: dataP2, backgroundColor: colorP2 },
+                        { label: 'P3', data: dataP3, backgroundColor: colorP3 }, { label: 'P4', data: dataP4, backgroundColor: colorP4 }
                     ]
                 },
                 options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
+                    responsive: true, maintainAspectRatio: false,
                     scales: {
                         x: { stacked: true, grid: { display: false }, ticks: { color: getThemeColor('--text'), font: { size: 8 } } },
                         y: { stacked: true, grid: { color: getThemeColor('--border') }, ticks: { color: getThemeColor('--text'), font: { size: 8 } } }
@@ -566,39 +597,23 @@
                     plugins: { legend: { display: false } }
                 }
             });
-
-            const totalWeekSec = sessions.filter(s => {
-                const diffTime = Math.abs(selectedDate - new Date(s.date));
-                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-                return diffDays <= 7;
-            }).reduce((a,s)=>a+s.duration, 0);
-
-            listContainer.innerHTML = `<div style="font-size:11px; color:var(--muted); text-align:center; margin-top:5px;">Total concentré (7 jours) : <b>${formatDuration(totalWeekSec)}</b></div>`;
-
         } else if (currentView === 'month') {
             pieWrapper.style.display = 'none';
             calContainer.style.display = 'block';
-            
             const grid = document.getElementById('monthGrid');
             grid.innerHTML = '';
             
-            const year = selectedDate.getFullYear();
-            const month = selectedDate.getMonth();
-            
+            const year = selectedDate.getFullYear(), month = selectedDate.getMonth();
             const firstDayIndex = new Date(year, month, 1).getDay(); 
             const startingOffset = (firstDayIndex + 6) % 7;
             const daysInMonth = new Date(year, month + 1, 0).getDate();
             
-            for (let x = 0; x < startingOffset; x++) {
-                grid.innerHTML += `<div style="height:32px;"></div>`;
-            }
-            
+            for (let x = 0; x < startingOffset; x++) grid.innerHTML += `<div style="height:32px;"></div>`;
             const goalSeconds = dailyGoalHours * 3600;
 
             for (let day = 1; day <= daysInMonth; day++) {
                 const dayDate = new Date(year, month, day);
                 const daySess = sessions.filter(s => new Date(s.date).toDateString() === dayDate.toDateString());
-                
                 let gradientStr = 'var(--rem)';
                 const totalWorked = daySess.reduce((acc, s)=>acc+s.duration, 0);
 
@@ -613,9 +628,7 @@
                         return `var(--p${p}) ${start}% ${end}%`;
                     }).filter(Boolean);
 
-                    if (totalWorked < goalSeconds) {
-                        segments.push(`var(--rem) ${(totalWorked / goalSeconds) * 100}% 100%`);
-                    }
+                    if (totalWorked < goalSeconds) segments.push(`var(--rem) ${(totalWorked / goalSeconds) * 100}% 100%`);
                     gradientStr = `conic-gradient(${segments.join(', ')})`;
                 }
 
@@ -635,7 +648,6 @@
         changeView('day');
     }
 
-    // Gestion propre de la fermeture
     function hideStats() {
         document.getElementById('mainView').style.display = 'flex';
         document.getElementById('statsView').style.display = 'none';
@@ -644,8 +656,8 @@
     // Initialisation
     setPriority(4); 
     updateDisplay();
+    renderTodos();
 
-    // Chargement du thème sauvegardé
     const savedTheme = localStorage.getItem('focusTheme') || 'dark';
     const isLight = savedTheme === 'light';
     document.getElementById('themeToggle').checked = isLight;
