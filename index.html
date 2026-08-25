@@ -263,6 +263,15 @@
     document.getElementById('startHourInput').value = dayStartHour;
     document.getElementById('ratioInput').value = Math.round(concentrationRatio * 100);
 
+    // Migration du format de t.worked (des heures vers les secondes)
+    todos.forEach(t => {
+        if (t.worked === undefined) t.worked = 0;
+        // Si la valeur est décimale et petite, elle était stockée en heures dans la version précédente.
+        if (t.worked > 0 && t.worked < 24 && t.worked % 1 !== 0) {
+            t.worked = Math.round(t.worked * 3600);
+        }
+    });
+
     function getThemeColor(v) { return getComputedStyle(document.body).getPropertyValue(v).trim(); }
 
     function toggleTheme(isLight) {
@@ -302,7 +311,18 @@
         });
     }
 
-    // --- TO-DO LIST ENGINE ---
+    function formatTaskWorked(sec) {
+        if (!sec || sec < 0) return "0m";
+        const h = Math.floor(sec / 3600);
+        const m = Math.floor((sec % 3600) / 60);
+        const s = Math.floor(sec % 60);
+        
+        if (h > 0) return `${h}h${String(m).padStart(2, '0')}`;
+        if (m > 0) return `${m}m`;
+        return `${s}s`;
+    }
+
+    // --- TO-DO LIST ENGINE (Tracker Temps Réel) ---
     function renderTodos() {
         const list = document.getElementById('todoList');
         list.innerHTML = '';
@@ -314,6 +334,12 @@
             li.className = `todo-item ${t.completed ? 'completed' : ''} ${t.id == activeTodoId ? 'active-task' : ''}`;
             li.onclick = () => selectTodo(t.id);
 
+            // Calcul du temps réel cumulé pour l'affichage (Ajoute les secondes du chrono actif si la tâche est sélectionnée)
+            let displaySec = t.worked || 0;
+            if (isRunning && t.id == activeTodoId) {
+                displaySec += elapsed / 1000;
+            }
+
             li.innerHTML = `
                 <div class="todo-left">
                     <input type="checkbox" ${t.completed ? 'checked' : ''} onclick="event.stopPropagation(); toggleTodoDone('${t.id}')">
@@ -321,7 +347,9 @@
                 </div>
                 <div style="display:flex; align-items:center; gap:6px;">
                     <span class="session-priority" style="background:var(--p${t.priority})">P${t.priority}</span>
-                    <span style="font-size:10px; color:var(--muted)">${t.completed ? t.worked.toFixed(1) : t.estimate}h</span>
+                    <span style="font-size:10px; color:var(--muted); font-weight:bold; font-variant-numeric: tabular-nums;">
+                        ⏱️ ${formatTaskWorked(displaySec)} / ${t.estimate}h
+                    </span>
                     <button onclick="event.stopPropagation(); deleteTodo('${t.id}')" style="background:none; border:none; color:var(--p1); cursor:pointer; font-weight:bold;">✕</button>
                 </div>
             `;
@@ -392,9 +420,10 @@
             sessions.push({ date: Date.now(), duration: durationSec, priority: currentPriority });
             localStorage.setItem('focusSessions', JSON.stringify(sessions));
             
+            // Enregistre les secondes réelles travaillées sur la tâche active
             if (activeTodoId) {
                 const t = todos.find(t => t.id === activeTodoId);
-                if (t) t.worked += durationSec / 3600;
+                if (t) t.worked = (t.worked || 0) + durationSec;
                 localStorage.setItem('focusTodos', JSON.stringify(todos));
             }
             
@@ -408,6 +437,11 @@
         const h = Math.floor(elapsed / 3600000), m = Math.floor((elapsed % 3600000) / 60000), s = Math.floor((elapsed % 60000) / 1000);
         document.getElementById('timer').textContent = `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
         updateDayStats();
+        
+        // Rafraîchir l'affichage du temps de la tâche en cours d'exécution de manière fluide (sans réécrire le DOM)
+        if (isRunning && activeTodoId) {
+            renderTodos();
+        }
     }
 
     function updateDayStats() {
@@ -421,7 +455,6 @@
         const goalSeconds = dailyGoalHours * 3600;
         document.getElementById('percText').textContent = Math.min((totalSec / goalSeconds) * 100, 100).toFixed(1) + "%";
         
-        // Estimation dynamique de fin de journée avec Ratio de Concentration
         const remainingSec = Math.max(0, goalSeconds - totalSec);
         const estEndEl = document.getElementById('estimatedEnd');
         
@@ -429,11 +462,9 @@
             estEndEl.textContent = "Objectif atteint !";
         } else {
             const now = new Date();
-            // Temps réel requis basé sur le ratio d'efficacité
             const realRemainingSec = remainingSec / concentrationRatio;
             let estimatedEndTime = new Date(now.getTime() + realRemainingSec * 1000);
             
-            // Intégration de la pause dej
             const lunchLimit = new Date(now);
             lunchLimit.setHours(12, 30, 0, 0);
             if (now < lunchLimit && estimatedEndTime > lunchLimit) {
@@ -476,7 +507,6 @@
         } else {
             activeWorkTime = t - dayStartHour;
         }
-        // Le focus théorique accumulé dépend de notre ratio de concentration
         return Math.max(0, Math.min(dailyGoalHours, activeWorkTime * concentrationRatio));
     }
 
@@ -521,12 +551,10 @@
                 options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'right', labels: { color: getThemeColor('--text'), boxWidth: 8, font: { size: 8 } } } } }
             });
 
-            // S-Curve à pente dynamique ajustée au Ratio de Concentration
             const labels = [];
             const theoreticalData = [];
             const actualData = [];
             let lunchIncluded = (dayStartHour < 12.5);
-            // La journée se finit plus tard en fonction du ratio d'efficacité
             let theoreticalTotalElapsed = (dailyGoalHours / concentrationRatio) + (lunchIncluded ? 1 : 0);
             let endHour = Math.max(dayStartHour + theoreticalTotalElapsed + 0.5, 18);
 
