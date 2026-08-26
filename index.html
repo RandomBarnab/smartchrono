@@ -274,7 +274,6 @@
         if (!Array.isArray(todos)) todos = [];
     } catch(e) { todos = []; }
 
-    // Nettoyage de l'ID de tâche active s'il est resté bloqué à la chaîne "null"
     let activeTodoId = localStorage.getItem('focusActiveTodoId');
     if (activeTodoId === "null" || activeTodoId === "undefined" || !activeTodoId) {
         activeTodoId = null;
@@ -390,14 +389,13 @@
             if (!t) return;
             if (!t.completed) estSum += t.estimate;
             
-            // Masquage intelligent des tâches terminées si l'option est active
             if (t.completed && !showCompletedTodos) return;
 
             const li = document.createElement('li');
             li.className = `todo-item ${t.completed ? 'completed' : ''} ${t.id == activeTodoId ? 'active-task' : ''}`;
             
             li.onclick = (e) => {
-                if (e.target.tagName === 'INPUT' || e.target.tagName === 'BUTTON') return;
+                if (e.target.type === 'checkbox' || e.target.tagName === 'BUTTON') return;
                 selectTodo(t.id);
             };
 
@@ -531,7 +529,6 @@
         updateDayStats();
         
         if (isRunning) {
-            // MET À JOUR UNIQUEMENT LE TEXTE DU CHRONO DE MANIERE CIBLEE (DÉBLOQUE LES CLICS !)
             const liveSpan = document.getElementById('live-task-time-span');
             if (liveSpan && activeTodoId) {
                 const activeTodo = todos.find(t => t.id == activeTodoId);
@@ -663,6 +660,39 @@
             updateDayStats();
             renderCharts();
         }
+    }
+
+    // --- MODIFIER UNE SESSION DU BACKLOG (DUREE OU PRIORITE) ---
+    function editSession(sessionDateStr) {
+        const s = sessions.find(s => s && (s.date === sessionDateStr || String(s.date) === String(sessionDateStr)));
+        if (!s) return;
+
+        let currentMinutes = (parseFloat(s.duration) || 0) / 60;
+        let newMin = prompt("Modifier la durée de cette session (en minutes) :", currentMinutes.toFixed(1));
+        if (newMin === null) return; // Annulation
+
+        let parsedMin = parseFloat(newMin);
+        if (isNaN(parsedMin) || parsedMin < 0) {
+            alert("Durée invalide.");
+            return;
+        }
+
+        let newPrio = prompt("Modifier la priorité (1, 2, 3 ou 4) :", s.priority);
+        if (newPrio === null) return; // Annulation
+
+        let parsedPrio = parseInt(newPrio);
+        if (isNaN(parsedPrio) || parsedPrio < 1 || parsedPrio > 4) {
+            alert("Priorité invalide (doit être entre 1 et 4).");
+            return;
+        }
+
+        // Enregistrer la correction
+        s.duration = parsedMin * 60;
+        s.priority = parsedPrio;
+
+        localStorage.setItem('focusSessions', JSON.stringify(sessions));
+        updateDayStats();
+        renderCharts();
     }
 
     // --- ANALYSE & CHARTS ENGINE ---
@@ -797,7 +827,7 @@
                 }
             });
 
-            // HISTORIQUE DES SESSIONS AVEC EFFACEMENT INDIVIDUEL
+            // HISTORIQUE DES SESSIONS AVEC EFFACEMENT ET MODIFICATION INDIVIDUELLE
             if (daySess.length > 0) {
                 listContainer.innerHTML = '<h4 style="margin:10px 0 5px 0; font-size:12px;">Sessions du jour</h4>';
                 daySess.forEach((s, idx) => {
@@ -809,7 +839,10 @@
                                 <span>Session #${idx+1} à ${timeStr}</span>
                                 <span class="session-priority" style="background: var(--p${s.priority})">P${s.priority}</span>
                                 <span style="font-weight:bold;">${formatTaskWorked(parseFloat(s.duration))}</span>
-                                <button onclick="deleteSession('${s.date}')" style="background:none; border:none; color:var(--p1); font-weight:bold; cursor:pointer; padding:0 4px;">✕</button>
+                                <div style="display:flex; gap: 4px;">
+                                    <button onclick="editSession('${s.date}')" style="background:none; border:none; color:var(--chart-line); font-weight:bold; cursor:pointer; padding:0 4px;">✏️</button>
+                                    <button onclick="deleteSession('${s.date}')" style="background:none; border:none; color:var(--p1); font-weight:bold; cursor:pointer; padding:0 4px;">✕</button>
+                                </div>
                             </div>`;
                     }
                 });
@@ -879,7 +912,6 @@
                         return `var(--p${p}) ${start}% ${end}%`;
                     });
 
-                    // Filtrer les segments nuls d'une manière compatible ES5/ES6
                     const validSegments = [];
                     for(let k=0; k<segments.length; k++) {
                         if (segments[k] !== null) validSegments.push(segments[k]);
@@ -926,6 +958,7 @@
     window.hideStats = hideStats;
     window.changeView = changeView;
     window.deleteSession = deleteSession;
+    window.editSession = editSession;
     window.toggleCompletedVisibility = toggleCompletedVisibility;
 
     // Initialisation
