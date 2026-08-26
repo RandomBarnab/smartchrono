@@ -253,7 +253,7 @@
     let currentView = 'day', myChart = null, sCurveChart = null;
     let isStartHourManuallySet = false;
     
-    // --- BOUCLIER DE SÉCURITÉ LOCALSTORAGE (Anti-crash de script) ---
+    // --- BOUCLIER DE SÉCURITÉ LOCALSTORAGE (Anti-crash de script au démarrage) ---
     let sessions = [];
     try {
         const rawSess = localStorage.getItem('focusSessions');
@@ -720,7 +720,7 @@
                 const dayDate = new Date(year, month, day);
                 const daySess = sessions.filter(s => s && s.date && parseSessionDate(s.date).toDateString() === dayDate.toDateString());
                 let gradientStr = 'var(--rem)';
-                const totalWorked = daySess.reduce((acc, s)=acc+(parseFloat(s.duration) || 0), 0);
+                const totalWorked = daySess.reduce((acc, s) => acc + (parseFloat(s.duration) || 0), 0);
 
                 if (totalWorked > 0) {
                     let acc = 0;
