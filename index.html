@@ -251,6 +251,7 @@
 <script>
     let timerInterval, startTime, elapsed = 0, isRunning = false, currentPriority = 4;
     let currentView = 'day', myChart = null, sCurveChart = null;
+    let isStartHourManuallySet = false; // Flag de suivi de modification manuelle
     
     let sessions = JSON.parse(localStorage.getItem('focusSessions') || '[]');
     let dailyGoalHours = parseInt(localStorage.getItem('focusDailyGoal') || '7');
@@ -266,7 +267,6 @@
     // Migration du format de t.worked (des heures vers les secondes)
     todos.forEach(t => {
         if (t.worked === undefined) t.worked = 0;
-        // Si la valeur est décimale et petite, elle était stockée en heures dans la version précédente.
         if (t.worked > 0 && t.worked < 24 && t.worked % 1 !== 0) {
             t.worked = Math.round(t.worked * 3600);
         }
@@ -298,17 +298,30 @@
     function updateStartHour(val) {
         dayStartHour = Math.max(0, Math.min(23, parseInt(val) || 9));
         localStorage.setItem('focusStartHour', dayStartHour);
+        isStartHourManuallySet = true; // Marquer la saisie comme forcée
         if (currentView === 'day') renderCharts();
     }
 
-    function setPriority(p) {
-        currentPriority = p;
-        document.getElementById('activePriorityLabel').textContent = 'P' + p;
-        document.getElementById('activePriorityLabel').style.color = `var(--p${p})`;
-        document.querySelectorAll('.p-btn').forEach((b, i) => {
-            b.classList.toggle('active', i+1 === p);
-            b.style.backgroundColor = (i+1 === p) ? `var(--p${p})` : 'transparent';
+    // Calcul de l'heure du premier lancement réel
+    function getAutoStartHour(selectedDateStr) {
+        let startTimestamps = [];
+        const daySess = sessions.filter(s => new Date(s.date).toISOString().split('T')[0] === selectedDateStr);
+        daySess.forEach(s => {
+            startTimestamps.push(s.date - s.duration * 1000);
         });
+        
+        const todayStr = new Date().toISOString().split('T')[0];
+        if (isRunning && selectedDateStr === todayStr) {
+            startTimestamps.push(startTime);
+        }
+        
+        if (startTimestamps.length > 0) {
+            const minTimestamp = Math.min(...startTimestamps);
+            const minDate = new Date(minTimestamp);
+            // Arrondir à la demi-heure inférieure
+            return Math.floor(minDate.getHours() * 2 + minDate.getMinutes() / 30) / 2;
+        }
+        return parseInt(localStorage.getItem('focusStartHour') || '9');
     }
 
     function formatTaskWorked(sec) {
@@ -316,7 +329,6 @@
         const h = Math.floor(sec / 3600);
         const m = Math.floor((sec % 3600) / 60);
         const s = Math.floor(sec % 60);
-        
         if (h > 0) return `${h}h${String(m).padStart(2, '0')}`;
         if (m > 0) return `${m}m`;
         return `${s}s`;
@@ -334,11 +346,8 @@
             li.className = `todo-item ${t.completed ? 'completed' : ''} ${t.id == activeTodoId ? 'active-task' : ''}`;
             li.onclick = () => selectTodo(t.id);
 
-            // Calcul du temps réel cumulé pour l'affichage (Ajoute les secondes du chrono actif si la tâche est sélectionnée)
             let displaySec = t.worked || 0;
-            if (isRunning && t.id == activeTodoId) {
-                displaySec += elapsed / 1000;
-            }
+            if (isRunning && t.id == activeTodoId) displaySec += elapsed / 1000;
 
             li.innerHTML = `
                 <div class="todo-left">
@@ -420,7 +429,6 @@
             sessions.push({ date: Date.now(), duration: durationSec, priority: currentPriority });
             localStorage.setItem('focusSessions', JSON.stringify(sessions));
             
-            // Enregistre les secondes réelles travaillées sur la tâche active
             if (activeTodoId) {
                 const t = todos.find(t => t.id === activeTodoId);
                 if (t) t.worked = (t.worked || 0) + durationSec;
@@ -438,9 +446,12 @@
         document.getElementById('timer').textContent = `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
         updateDayStats();
         
-        // Rafraîchir l'affichage du temps de la tâche en cours d'exécution de manière fluide (sans réécrire le DOM)
-        if (isRunning && activeTodoId) {
+        if (isRunning) {
             renderTodos();
+            // Rafraîchir dynamiquement le graphique S-Curve en direct si l'analyse est affichée
+            if (document.getElementById('statsView').style.display === 'flex' && currentView === 'day') {
+                renderCharts();
+            }
         }
     }
 
@@ -491,6 +502,9 @@
         currentView = view;
         document.querySelectorAll('.nav-btn').forEach(b => b.classList.toggle('active', b.id === `tab-${view}`));
         document.getElementById('startHourContainer').style.display = (view === 'day') ? 'block' : 'none';
+        
+        // Reset du flag manuel pour recalculer l'auto-start hour si on change de date/vue
+        isStartHourManuallySet = false;
         renderCharts();
     }
 
@@ -529,6 +543,12 @@
         const selectedDateStr = document.getElementById('dateSelector').value || new Date().toISOString().split('T')[0];
         const selectedDate = new Date(selectedDateStr);
 
+        // Détection de l'auto-start hour si non configurée manuellement
+        if (currentView === 'day' && !isStartHourManuallySet) {
+            dayStartHour = getAutoStartHour(selectedDateStr);
+            document.getElementById('startHourInput').value = dayStartHour;
+        }
+
         const colorP1 = getThemeColor('--p1'); const colorP2 = getThemeColor('--p2');
         const colorP3 = getThemeColor('--p3'); const colorP4 = getThemeColor('--p4');
         const colorRem = getThemeColor('--rem'); const colorLine = getThemeColor('--chart-line');
@@ -537,7 +557,15 @@
         if (currentView === 'day') {
             sCurveWrapper.style.display = 'block';
             const daySess = sessions.filter(s => new Date(s.date).toISOString().split('T')[0] === selectedDateStr);
-            const data = [1,2,3,4].map(p => daySess.filter(s => s.priority === p).reduce((a,s) => a+s.duration, 0));
+            
+            // Inclusion dynamique de la session courante dans le camembert
+            const data = [1,2,3,4].map(p => {
+                let pSec = daySess.filter(s => s.priority === p).reduce((a,s) => a+s.duration, 0);
+                if (isRunning && currentPriority === p && selectedDateStr === new Date().toISOString().split('T')[0]) {
+                    pSec += elapsed / 1000;
+                }
+                return pSec;
+            });
             const totalWorked = data.reduce((a,b)=>a+b,0);
             const goalSeconds = dailyGoalHours * 3600;
             data.push(Math.max(0, goalSeconds - totalWorked));
@@ -551,6 +579,7 @@
                 options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'right', labels: { color: getThemeColor('--text'), boxWidth: 8, font: { size: 8 } } } } }
             });
 
+            // S-Curve
             const labels = [];
             const theoreticalData = [];
             const actualData = [];
@@ -565,9 +594,20 @@
 
                 const limitTime = new Date(selectedDate);
                 limitTime.setHours(h, (t % 1 === 0) ? 0 : 30, 0, 0);
-                const actualSecAtT = daySess.filter(s => new Date(s.date) <= limitTime).reduce((sum, s) => sum + s.duration, 0);
+                
+                // Calcul de la contribution de la session active courante
+                let activeSecAtT = 0;
+                if (isRunning && selectedDateStr === new Date().toISOString().split('T')[0]) {
+                    const now = new Date();
+                    if (startTime < limitTime.getTime()) {
+                        const sessionEndInInterval = Math.min(now.getTime(), limitTime.getTime());
+                        activeSecAtT = Math.max(0, (sessionEndInInterval - startTime) / 1000);
+                    }
+                }
 
-                if (selectedDate.toDateString() === new Date().toDateString() && limitTime > new Date()) {
+                const actualSecAtT = daySess.filter(s => new Date(s.date) <= limitTime).reduce((sum, s) => sum + s.duration, 0) + activeSecAtT;
+
+                if (selectedDateStr === new Date().toISOString().split('T')[0] && limitTime > new Date()) {
                     actualData.push(null);
                 } else {
                     actualData.push(actualSecAtT / 3600);
@@ -673,6 +713,9 @@
         document.getElementById('mainView').style.display = 'none';
         document.getElementById('statsView').style.display = 'flex';
         document.getElementById('dateSelector').value = new Date().toISOString().split('T')[0];
+        
+        // Réinitialiser la modification manuelle lors de l'ouverture pour auto-détecter l'heure de départ
+        isStartHourManuallySet = false;
         changeView('day');
     }
 
