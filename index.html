@@ -165,6 +165,7 @@
                 </div>
                 <div id="dayTotal">00:00:00</div>
                 <div id="estimatedEnd">Fin estimée : --:--</div>
+                <div id="realConcentrationRate" style="font-size: 10px; color: var(--muted); margin-top: 2px; font-weight: bold;">Ratio réel : --%</div>
             </div>
             <div style="display: flex; flex-direction: column; align-items: flex-end;">
                 <div id="timer">00:00:00</div>
@@ -253,7 +254,7 @@
     let currentView = 'day', myChart = null, sCurveChart = null;
     let isStartHourManuallySet = false;
     
-    // --- BOUCLIER DE SÉCURITÉ LOCALSTORAGE (Anti-crash de script au démarrage) ---
+    // --- BOUCLIER DE SÉCURITÉ LOCALSTORAGE ---
     let sessions = [];
     try {
         const rawSess = localStorage.getItem('focusSessions');
@@ -287,7 +288,7 @@
         t.priority = parseInt(t.priority) || 4;
     });
 
-    // Parseur de date robuste (Supporte : timestamps, ISO strings, chaînes numériques)
+    // Parseur de date robuste
     function parseSessionDate(dateInput) {
         if (!dateInput) return null;
         if (typeof dateInput === 'string' && /^\d+$/.test(dateInput)) {
@@ -374,7 +375,7 @@
         return `${s}s`;
     }
 
-    // --- TO-DO LIST ENGINE ---
+    // --- TO-DO LIST ENGINE (Anti-Clickjacking) ---
     function renderTodos() {
         const list = document.getElementById('todoList');
         list.innerHTML = '';
@@ -385,10 +386,22 @@
             if (!t.completed) estSum += t.estimate;
             const li = document.createElement('li');
             li.className = `todo-item ${t.completed ? 'completed' : ''} ${t.id == activeTodoId ? 'active-task' : ''}`;
-            li.onclick = () => selectTodo(t.id);
+            
+            // Empêche de perdre le clic si on clique spécifiquement sur le texte de l'item
+            li.onclick = (e) => {
+                if (e.target.tagName === 'INPUT' || e.target.tagName === 'BUTTON') return;
+                selectTodo(t.id);
+            };
 
             let displaySec = parseFloat(t.worked) || 0;
-            if (isRunning && t.id == activeTodoId) displaySec += elapsed / 1000;
+            let liveTimerHtml = '';
+            
+            if (t.id == activeTodoId) {
+                // Utilisation d'un ID de span unique pour mise à jour in-place sans reconstruction
+                liveTimerHtml = `<span id="live-task-time-span" style="font-weight:bold; color:var(--chart-line);">⏱️ ${formatTaskWorked(displaySec + (isRunning ? elapsed / 1000 : 0))}</span>`;
+            } else {
+                liveTimerHtml = `<span>⏱️ ${formatTaskWorked(displaySec)}</span>`;
+            }
 
             li.innerHTML = `
                 <div class="todo-left">
@@ -397,8 +410,8 @@
                 </div>
                 <div style="display:flex; align-items:center; gap:6px;">
                     <span class="session-priority" style="background:var(--p${t.priority})">P${t.priority}</span>
-                    <span style="font-size:10px; color:var(--muted); font-weight:bold; font-variant-numeric: tabular-nums;">
-                        ⏱️ ${formatTaskWorked(displaySec)} / ${t.estimate}h
+                    <span style="font-size:10px; color:var(--muted); font-weight:bold; font-variant-numeric: tabular-nums; white-space:nowrap;">
+                        ${liveTimerHtml} / ${t.estimate}h
                     </span>
                     <button onclick="event.stopPropagation(); deleteTodo('${t.id}')" style="background:none; border:none; color:var(--p1); cursor:pointer; font-weight:bold;">✕</button>
                 </div>
@@ -488,7 +501,16 @@
         updateDayStats();
         
         if (isRunning) {
-            renderTodos();
+            // MET À JOUR UNIQUEMENT LE TEXTE DU CHRONO SANS RECRÉER LE DOM (DÉBLOQUE LES CLICS !)
+            const liveSpan = document.getElementById('live-task-time-span');
+            if (liveSpan && activeTodoId) {
+                const activeTodo = todos.find(t => t.id == activeTodoId);
+                if (activeTodo) {
+                    const totalSec = (parseFloat(activeTodo.worked) || 0) + (elapsed / 1000);
+                    liveSpan.textContent = `⏱️ ${formatTaskWorked(totalSec)}`;
+                }
+            }
+            
             if (document.getElementById('statsView').style.display === 'flex' && currentView === 'day') {
                 renderCharts();
             }
@@ -496,47 +518,109 @@
     }
 
     function updateDayStats() {
-        const today = new Date().toDateString();
-        // Filtrage robuste
-        const dailySessions = sessions.filter(s => s && s.date && new Date(s.date).toDateString() === today);
-        // Utilisation de parseFloat sur la durée pour éviter toute concaténation de chaînes
-        const totalSec = dailySessions.reduce((acc, s) => acc + (parseFloat(s.duration) || 0), 0) + (isRunning ? elapsed/1000 : 0);
-        
-        const h = Math.floor(totalSec / 3600), m = Math.floor((totalSec % 3600) / 60), s = Math.floor(totalSec % 60);
-        document.getElementById('dayTotal').textContent = `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
-        
-        const goalSeconds = dailyGoalHours * 3600;
-        document.getElementById('percText').textContent = Math.min((totalSec / goalSeconds) * 100, 100).toFixed(1) + "%";
-        
-        const remainingSec = Math.max(0, goalSeconds - totalSec);
-        const estEndEl = document.getElementById('estimatedEnd');
-        
-        if (remainingSec <= 0) {
-            estEndEl.textContent = "Objectif atteint !";
-        } else {
-            const now = new Date();
-            const realRemainingSec = remainingSec / concentrationRatio;
-            let estimatedEndTime = new Date(now.getTime() + realRemainingSec * 1000);
+        try {
+            const today = new Date().toDateString();
+            const dailySessions = sessions.filter(s => s && s.date && new Date(s.date).toDateString() === today);
+            const totalSec = dailySessions.reduce((acc, s) => acc + (parseFloat(s.duration) || 0), 0) + (isRunning ? elapsed/1000 : 0);
             
-            const lunchLimit = new Date(now);
-            lunchLimit.setHours(12, 30, 0, 0);
-            if (now < lunchLimit && estimatedEndTime > lunchLimit) {
-                estimatedEndTime = new Date(estimatedEndTime.getTime() + 3600 * 1000);
+            const h = Math.floor(totalSec / 3600), m = Math.floor((totalSec % 3600) / 60), s = Math.floor(totalSec % 60);
+            document.getElementById('dayTotal').textContent = `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+            
+            const goalSeconds = dailyGoalHours * 3600;
+            document.getElementById('percText').textContent = Math.min((totalSec / goalSeconds) * 100, 100).toFixed(1) + "%";
+            
+            const remainingSec = Math.max(0, goalSeconds - totalSec);
+            const estEndEl = document.getElementById('estimatedEnd');
+            
+            if (remainingSec <= 0) {
+                estEndEl.textContent = "Objectif atteint !";
+            } else {
+                const now = new Date();
+                const realRemainingSec = remainingSec / concentrationRatio;
+                let estimatedEndTime = new Date(now.getTime() + realRemainingSec * 1000);
+                
+                const lunchLimit = new Date(now);
+                lunchLimit.setHours(12, 30, 0, 0);
+                if (now < lunchLimit && estimatedEndTime > lunchLimit) {
+                    estimatedEndTime = new Date(estimatedEndTime.getTime() + 3600 * 1000);
+                }
+                
+                estEndEl.textContent = `Fin estimée : ${estimatedEndTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
             }
-            
-            estEndEl.textContent = `Fin estimée : ${estimatedEndTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
-        }
 
-        const bar = document.getElementById('progressBar');
-        bar.innerHTML = '';
-        [1,2,3,4].forEach(p => {
-            const pSec = dailySessions.filter(s => parseInt(s.priority) === p).reduce((a,s) => a + (parseFloat(s.duration) || 0), 0);
-            if (pSec > 0) {
-                const seg = document.createElement('div'); seg.className = 'segment'; 
-                seg.style.width = (pSec / goalSeconds * 100) + '%'; 
-                seg.style.backgroundColor = `var(--p${p})`; bar.appendChild(seg);
+            // Mise à jour du ratio réel
+            updateRealConcentrationRate(totalSec);
+
+            const bar = document.getElementById('progressBar');
+            bar.innerHTML = '';
+            [1,2,3,4].forEach(p => {
+                const pSec = dailySessions.filter(s => s && parseInt(s.priority) === p).reduce((a,s) => a + (parseFloat(s.duration) || 0), 0);
+                if (pSec > 0) {
+                    const seg = document.createElement('div'); seg.className = 'segment'; 
+                    seg.style.width = (pSec / goalSeconds * 100) + '%'; 
+                    seg.style.backgroundColor = `var(--p${p})`; bar.appendChild(seg);
+                }
+            });
+        } catch (e) {
+            console.error(e);
+        }
+    }
+
+    // --- CALCULATEUR DE TAUX DE CONCENTRATION REEL DISCRET ---
+    function updateRealConcentrationRate(totalWorkedSec) {
+        const rateEl = document.getElementById('realConcentrationRate');
+        if (!rateEl) return;
+
+        try {
+            const todayStr = getLocalYYYYMMDD();
+            let startTimestamps = [];
+            const daySess = sessions.filter(s => {
+                if (!s || !s.date) return false;
+                const d = parseSessionDate(s.date);
+                return d && getLocalYYYYMMDD(d) === todayStr;
+            });
+            
+            daySess.forEach(s => {
+                const parsedDate = parseSessionDate(s.date);
+                if (parsedDate) {
+                    startTimestamps.push(parsedDate.getTime() - (parseFloat(s.duration) || 0) * 1000);
+                }
+            });
+            
+            if (isRunning) {
+                startTimestamps.push(startTime);
             }
-        });
+
+            if (startTimestamps.length === 0) {
+                rateEl.textContent = "Ratio réel : --%";
+                return;
+            }
+
+            const firstStart = Math.min(...startTimestamps);
+            const now = Date.now();
+            const elapsedTotalMs = now - firstStart;
+
+            if (elapsedTotalMs <= 0) {
+                rateEl.textContent = "Ratio réel : 100%";
+                return;
+            }
+
+            // Déduction exacte de la pause déjeuner au prorata du temps écoulé
+            const todayLunchStart = new Date(); todayLunchStart.setHours(12, 30, 0, 0);
+            const todayLunchEnd = new Date(); todayLunchEnd.setHours(13, 30, 0, 0);
+
+            const overlapStart = Math.max(firstStart, todayLunchStart.getTime());
+            const overlapEnd = Math.min(now, todayLunchEnd.getTime());
+            const lunchOverlapMs = Math.max(0, overlapEnd - overlapStart);
+
+            let netElapsedSec = (elapsedTotalMs - lunchOverlapMs) / 1000;
+            if (netElapsedSec <= 0) netElapsedSec = 1;
+
+            const rate = (totalWorkedSec / netElapsedSec) * 100;
+            rateEl.textContent = `Ratio réel : ${Math.min(100, Math.max(0, rate)).toFixed(1)}%`;
+        } catch (e) {
+            rateEl.textContent = "Ratio réel : --%";
+        }
     }
 
     // --- ANALYSE & CHARTS ENGINE ---
