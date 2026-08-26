@@ -102,7 +102,7 @@
         
         /* Boutons de priorité */
         .controls-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; width: 100%; }
-        .p-btn { border: 1px solid var(--border); background: transparent; color: var(--muted); padding: 6px 0; border-radius: 4px; cursor: pointer; font-size: 10px; transition: all 0.2s; font-weight: bold; }
+        .p-btn { border: 1px solid var(--border); background: transparent; color: var(--text); padding: 6px 0; border-radius: 4px; cursor: pointer; font-size: 10px; transition: all 0.2s; font-weight: bold; }
         .p-btn.active { color: white; border-color: transparent; }
         body.light-theme .p-btn.active { color: #333; }
 
@@ -198,7 +198,7 @@
         <!-- TO-DO LIST -->
         <div class="todo-section">
             <div class="todo-header">
-                <span>Ma To-Do</span>
+                <span>Ma To-Do <span id="toggleCompletedBtn" onclick="toggleCompletedVisibility()" style="cursor:pointer; text-decoration:underline; font-size:9px; color:var(--muted); margin-left: 6px; font-weight: normal;">Afficher terminées</span></span>
                 <span id="todoTotalTime" style="font-weight: normal; color: var(--muted);">Est: 0h</span>
             </div>
             <div class="todo-input-container">
@@ -253,6 +253,7 @@
     let timerInterval, startTime, elapsed = 0, isRunning = false, currentPriority = 4;
     let currentView = 'day', myChart = null, sCurveChart = null;
     let isStartHourManuallySet = false;
+    let showCompletedTodos = localStorage.getItem('focusShowCompletedTodos') === 'true';
     
     // --- BOUCLIER DE SÉCURITÉ LOCALSTORAGE ---
     let sessions = [];
@@ -273,13 +274,17 @@
         if (!Array.isArray(todos)) todos = [];
     } catch(e) { todos = []; }
 
-    let activeTodoId = localStorage.getItem('focusActiveTodoId') || null;
+    // Nettoyage de l'ID de tâche active s'il est resté bloqué à la chaîne "null"
+    let activeTodoId = localStorage.getItem('focusActiveTodoId');
+    if (activeTodoId === "null" || activeTodoId === "undefined" || !activeTodoId) {
+        activeTodoId = null;
+    }
 
     document.getElementById('goalInput').value = dailyGoalHours;
     document.getElementById('startHourInput').value = dayStartHour;
     document.getElementById('ratioInput').value = Math.round(concentrationRatio * 100);
 
-    // Nettoyage et calibration des tâches
+    // Nettoyage et calibration sécurisée des tâches chargées
     todos.forEach(t => {
         if (!t) return;
         if (t.worked === undefined) t.worked = 0;
@@ -298,7 +303,7 @@
         return isNaN(d.getTime()) ? null : d;
     }
 
-    // Générateur de date locale robuste
+    // Générateur de date locale sans décalage de fuseau horaire
     function getLocalYYYYMMDD(dateObj) {
         const d = dateObj || new Date();
         const yyyy = d.getFullYear();
@@ -375,7 +380,7 @@
         return `${s}s`;
     }
 
-    // --- TO-DO LIST ENGINE (Anti-Clickjacking) ---
+    // --- TO-DO LIST ENGINE ---
     function renderTodos() {
         const list = document.getElementById('todoList');
         list.innerHTML = '';
@@ -384,6 +389,10 @@
         todos.forEach(t => {
             if (!t) return;
             if (!t.completed) estSum += t.estimate;
+            
+            // Masquage intelligent des tâches terminées si l'option est active
+            if (t.completed && !showCompletedTodos) return;
+
             const li = document.createElement('li');
             li.className = `todo-item ${t.completed ? 'completed' : ''} ${t.id == activeTodoId ? 'active-task' : ''}`;
             
@@ -424,6 +433,13 @@
         } else {
             loadEl.innerHTML = '';
         }
+    }
+
+    function toggleCompletedVisibility() {
+        showCompletedTodos = !showCompletedTodos;
+        localStorage.setItem('focusShowCompletedTodos', showCompletedTodos);
+        document.getElementById('toggleCompletedBtn').textContent = showCompletedTodos ? "Masquer terminées" : "Afficher terminées";
+        renderTodos();
     }
 
     function addTodo() {
@@ -468,6 +484,22 @@
         }
     }
 
+    function setPriority(p) {
+        currentPriority = p;
+        document.getElementById('activePriorityLabel').textContent = 'P' + p;
+        document.getElementById('activePriorityLabel').style.color = `var(--p${p})`;
+        document.querySelectorAll('.p-btn').forEach((b, i) => {
+            const isActive = (i+1 === p);
+            b.classList.toggle('active', isActive);
+            b.style.backgroundColor = isActive ? `var(--p${p})` : 'transparent';
+            if (isActive) {
+                b.style.color = (p === 4 && document.body.classList.contains('light-theme')) ? '#333333' : '#ffffff';
+            } else {
+                b.style.color = document.body.classList.contains('light-theme') ? '#5a5a5a' : 'var(--muted)';
+            }
+        });
+    }
+
     // --- TIMER ENGINE ---
     function toggleTimer() {
         const btn = document.getElementById('startStopBtn');
@@ -499,6 +531,7 @@
         updateDayStats();
         
         if (isRunning) {
+            // MET À JOUR UNIQUEMENT LE TEXTE DU CHRONO DE MANIERE CIBLEE (DÉBLOQUE LES CLICS !)
             const liveSpan = document.getElementById('live-task-time-span');
             if (liveSpan && activeTodoId) {
                 const activeTodo = todos.find(t => t.id == activeTodoId);
@@ -624,7 +657,6 @@
         if (confirm("Voulez-vous supprimer cette session de l'historique ?")) {
             sessions = sessions.filter(s => {
                 if (!s || !s.date) return false;
-                // Filtrer en comparant la valeur de date d'origine
                 return s.date !== sessionDateStr && String(s.date) !== String(sessionDateStr);
             });
             localStorage.setItem('focusSessions', JSON.stringify(sessions));
@@ -765,7 +797,7 @@
                 }
             });
 
-            // RENDU DU BACKLOG DE SESSIONS DISCORD/COFFEE AVEC SUPPRESSION
+            // HISTORIQUE DES SESSIONS AVEC EFFACEMENT INDIVIDUEL
             if (daySess.length > 0) {
                 listContainer.innerHTML = '<h4 style="margin:10px 0 5px 0; font-size:12px;">Sessions du jour</h4>';
                 daySess.forEach((s, idx) => {
@@ -845,10 +877,16 @@
                         acc += dur;
                         const end = (acc / Math.max(goalSeconds, totalWorked)) * 100;
                         return `var(--p${p}) ${start}% ${end}%`;
-                    }).filter(Boolean);
+                    });
 
-                    if (totalWorked < goalSeconds) segments.push(`var(--rem) ${(totalWorked / goalSeconds) * 100}% 100%`);
-                    gradientStr = `conic-gradient(${segments.join(', ')})`;
+                    // Filtrer les segments nuls d'une manière compatible ES5/ES6
+                    const validSegments = [];
+                    for(let k=0; k<segments.length; k++) {
+                        if (segments[k] !== null) validSegments.push(segments[k]);
+                    }
+
+                    if (totalWorked < goalSeconds) validSegments.push(`var(--rem) ${(totalWorked / goalSeconds) * 100}% 100%`);
+                    gradientStr = `conic-gradient(${validSegments.join(', ')})`;
                 }
 
                 grid.innerHTML += `
@@ -873,10 +911,30 @@
         document.getElementById('statsView').style.display = 'none';
     }
 
+    // --- ATTACHEMENT GLOBAL AU WINDOW (Garantit le bon fonctionnement sur Edge et Safari) ---
+    window.setPriority = setPriority;
+    window.toggleTheme = toggleTheme;
+    window.updateGoal = updateGoal;
+    window.updateRatio = updateRatio;
+    window.updateStartHour = updateStartHour;
+    window.addTodo = addTodo;
+    window.toggleTodoDone = toggleTodoDone;
+    window.deleteTodo = deleteTodo;
+    window.selectTodo = selectTodo;
+    window.toggleTimer = toggleTimer;
+    window.showStats = showStats;
+    window.hideStats = hideStats;
+    window.changeView = changeView;
+    window.deleteSession = deleteSession;
+    window.toggleCompletedVisibility = toggleCompletedVisibility;
+
     // Initialisation
     setPriority(4); 
     updateDisplay();
     renderTodos();
+
+    // Initialiser le texte du bouton de masquage
+    document.getElementById('toggleCompletedBtn').textContent = showCompletedTodos ? "Masquer terminées" : "Afficher terminées";
 
     const savedTheme = localStorage.getItem('focusTheme') || 'dark';
     const isLight = savedTheme === 'light';
