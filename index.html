@@ -253,10 +253,11 @@
     let currentView = 'day', myChart = null, sCurveChart = null;
     let isStartHourManuallySet = false;
     
-    // --- BOUCLIER CHARGEMENT ROBUSTE LOCALSTORAGE ---
+    // --- BOUCLIER DE SÉCURITÉ LOCALSTORAGE (Anti-crash de script) ---
     let sessions = [];
     try {
-        sessions = JSON.parse(localStorage.getItem('focusSessions')) || [];
+        const rawSess = localStorage.getItem('focusSessions');
+        sessions = rawSess ? JSON.parse(rawSess) : [];
         if (!Array.isArray(sessions)) sessions = [];
     } catch(e) { sessions = []; }
 
@@ -266,7 +267,8 @@
     
     let todos = [];
     try {
-        todos = JSON.parse(localStorage.getItem('focusTodos')) || [];
+        const rawTodos = localStorage.getItem('focusTodos');
+        todos = rawTodos ? JSON.parse(rawTodos) : [];
         if (!Array.isArray(todos)) todos = [];
     } catch(e) { todos = []; }
 
@@ -276,28 +278,32 @@
     document.getElementById('startHourInput').value = dayStartHour;
     document.getElementById('ratioInput').value = Math.round(concentrationRatio * 100);
 
-    // Nettoyage et recalibrage des anciennes tâches
+    // Nettoyage et calibration sécurisée des tâches chargées
     todos.forEach(t => {
         if (!t) return;
         if (t.worked === undefined) t.worked = 0;
-        // Si ancien format en décimal d'heures (ex: 0.25h), conversion robuste en secondes
-        if (t.worked > 0 && t.worked < 24 && t.worked % 1 !== 0) {
-            t.worked = Math.round(t.worked * 3600);
-        }
+        t.worked = parseFloat(t.worked) || 0;
+        t.estimate = parseFloat(t.estimate) || 1.0;
+        t.priority = parseInt(t.priority) || 4;
     });
 
-    // Helper Date robuste sans RangeError
-    function formatDateToYYYYMMDD(dateInput) {
-        try {
-            const d = new Date(dateInput);
-            if (isNaN(d.getTime())) return "";
-            const yyyy = d.getFullYear();
-            const mm = String(d.getMonth() + 1).padStart(2, '0');
-            const dd = String(d.getDate()).padStart(2, '0');
-            return `${yyyy}-${mm}-${dd}`;
-        } catch(e) {
-            return "";
+    // Parseur de date robuste (Supporte : timestamps, ISO strings, chaînes numériques)
+    function parseSessionDate(dateInput) {
+        if (!dateInput) return null;
+        if (typeof dateInput === 'string' && /^\d+$/.test(dateInput)) {
+            dateInput = parseInt(dateInput);
         }
+        const d = new Date(dateInput);
+        return isNaN(d.getTime()) ? null : d;
+    }
+
+    // Générateur de date locale sans décalage de fuseau horaire
+    function getLocalYYYYMMDD(dateObj) {
+        const d = dateObj || new Date();
+        const yyyy = d.getFullYear();
+        const mm = String(d.getMonth() + 1).padStart(2, '0');
+        const dd = String(d.getDate()).padStart(2, '0');
+        return `${yyyy}-${mm}-${dd}`;
     }
 
     function getThemeColor(v) { return getComputedStyle(document.body).getPropertyValue(v).trim(); }
@@ -330,19 +336,22 @@
         if (currentView === 'day') renderCharts();
     }
 
-    // Détection auto sans RangeError
     function getAutoStartHour(selectedDateStr) {
         let startTimestamps = [];
-        const daySess = sessions.filter(s => s && s.date && formatDateToYYYYMMDD(s.date) === selectedDateStr);
+        const daySess = sessions.filter(s => {
+            if (!s || !s.date) return false;
+            const d = parseSessionDate(s.date);
+            return d && getLocalYYYYMMDD(d) === selectedDateStr;
+        });
         
         daySess.forEach(s => {
-            const parsedDate = new Date(s.date);
-            if (!isNaN(parsedDate.getTime())) {
-                startTimestamps.push(parsedDate.getTime() - (s.duration || 0) * 1000);
+            const parsedDate = parseSessionDate(s.date);
+            if (parsedDate) {
+                startTimestamps.push(parsedDate.getTime() - (parseFloat(s.duration) || 0) * 1000);
             }
         });
         
-        const todayStr = formatDateToYYYYMMDD(new Date());
+        const todayStr = getLocalYYYYMMDD();
         if (isRunning && selectedDateStr === todayStr) {
             startTimestamps.push(startTime);
         }
@@ -378,7 +387,7 @@
             li.className = `todo-item ${t.completed ? 'completed' : ''} ${t.id == activeTodoId ? 'active-task' : ''}`;
             li.onclick = () => selectTodo(t.id);
 
-            let displaySec = t.worked || 0;
+            let displaySec = parseFloat(t.worked) || 0;
             if (isRunning && t.id == activeTodoId) displaySec += elapsed / 1000;
 
             li.innerHTML = `
@@ -463,7 +472,7 @@
             
             if (activeTodoId) {
                 const t = todos.find(t => t.id === activeTodoId);
-                if (t) t.worked = (t.worked || 0) + durationSec;
+                if (t) t.worked = (parseFloat(t.worked) || 0) + durationSec;
                 localStorage.setItem('focusTodos', JSON.stringify(todos));
             }
             
@@ -488,8 +497,10 @@
 
     function updateDayStats() {
         const today = new Date().toDateString();
+        // Filtrage robuste
         const dailySessions = sessions.filter(s => s && s.date && new Date(s.date).toDateString() === today);
-        const totalSec = dailySessions.reduce((acc, s) => acc + s.duration, 0) + (isRunning ? elapsed/1000 : 0);
+        // Utilisation de parseFloat sur la durée pour éviter toute concaténation de chaînes
+        const totalSec = dailySessions.reduce((acc, s) => acc + (parseFloat(s.duration) || 0), 0) + (isRunning ? elapsed/1000 : 0);
         
         const h = Math.floor(totalSec / 3600), m = Math.floor((totalSec % 3600) / 60), s = Math.floor(totalSec % 60);
         document.getElementById('dayTotal').textContent = `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
@@ -519,7 +530,7 @@
         const bar = document.getElementById('progressBar');
         bar.innerHTML = '';
         [1,2,3,4].forEach(p => {
-            const pSec = dailySessions.filter(s => s.priority === p).reduce((a,s) => a + s.duration, 0);
+            const pSec = dailySessions.filter(s => parseInt(s.priority) === p).reduce((a,s) => a + (parseFloat(s.duration) || 0), 0);
             if (pSec > 0) {
                 const seg = document.createElement('div'); seg.className = 'segment'; 
                 seg.style.width = (pSec / goalSeconds * 100) + '%'; 
@@ -569,7 +580,7 @@
         pieWrapper.style.display = 'block';
         sCurveWrapper.style.display = 'none';
 
-        const selectedDateStr = document.getElementById('dateSelector').value || new Date().toISOString().split('T')[0];
+        const selectedDateStr = document.getElementById('dateSelector').value || getLocalYYYYMMDD();
         const selectedDate = new Date(selectedDateStr);
 
         if (currentView === 'day' && !isStartHourManuallySet) {
@@ -584,11 +595,11 @@
 
         if (currentView === 'day') {
             sCurveWrapper.style.display = 'block';
-            const daySess = sessions.filter(s => s && s.date && formatDateToYYYYMMDD(s.date) === selectedDateStr);
+            const daySess = sessions.filter(s => s && s.date && getLocalYYYYMMDD(parseSessionDate(s.date)) === selectedDateStr);
             
             const data = [1,2,3,4].map(p => {
-                let pSec = daySess.filter(s => s.priority === p).reduce((a,s) => a+s.duration, 0);
-                if (isRunning && currentPriority === p && selectedDateStr === formatDateToYYYYMMDD(new Date())) {
+                let pSec = daySess.filter(s => parseInt(s.priority) === p).reduce((a,s) => a+(parseFloat(s.duration) || 0), 0);
+                if (isRunning && currentPriority === p && selectedDateStr === getLocalYYYYMMDD()) {
                     pSec += elapsed / 1000;
                 }
                 return pSec;
@@ -623,7 +634,7 @@
                 limitTime.setHours(h, (t % 1 === 0) ? 0 : 30, 0, 0);
                 
                 let activeSecAtT = 0;
-                if (isRunning && selectedDateStr === formatDateToYYYYMMDD(new Date())) {
+                if (isRunning && selectedDateStr === getLocalYYYYMMDD()) {
                     const now = new Date();
                     if (startTime < limitTime.getTime()) {
                         const sessionEndInInterval = Math.min(now.getTime(), limitTime.getTime());
@@ -631,9 +642,9 @@
                     }
                 }
 
-                const actualSecAtT = daySess.filter(s => s && s.date && new Date(s.date) <= limitTime).reduce((sum, s) => sum + s.duration, 0) + activeSecAtT;
+                const actualSecAtT = daySess.filter(s => s && s.date && parseSessionDate(s.date) <= limitTime).reduce((sum, s) => sum + (parseFloat(s.duration) || 0), 0) + activeSecAtT;
 
-                if (selectedDateStr === formatDateToYYYYMMDD(new Date()) && limitTime > new Date()) {
+                if (selectedDateStr === getLocalYYYYMMDD() && limitTime > new Date()) {
                     actualData.push(null);
                 } else {
                     actualData.push(actualSecAtT / 3600);
@@ -666,11 +677,11 @@
             for (let i = 6; i >= 0; i--) {
                 const d = new Date(selectedDate); d.setDate(selectedDate.getDate() - i);
                 labels.push(d.toLocaleDateString([], { weekday: 'short', day: 'numeric' }));
-                const daySess = sessions.filter(s => s && s.date && new Date(s.date).toDateString() === d.toDateString());
-                dataP1.push(daySess.filter(s => s.priority === 1).reduce((a,s)=>a+s.duration,0)/3600);
-                dataP2.push(daySess.filter(s => s.priority === 2).reduce((a,s)=>a+s.duration,0)/3600);
-                dataP3.push(daySess.filter(s => s.priority === 3).reduce((a,s)=>a+s.duration,0)/3600);
-                dataP4.push(daySess.filter(s => s.priority === 4).reduce((a,s)=>a+s.duration,0)/3600);
+                const daySess = sessions.filter(s => s && s.date && parseSessionDate(s.date).toDateString() === d.toDateString());
+                dataP1.push(daySess.filter(s => parseInt(s.priority) === 1).reduce((a,s)=>a+(parseFloat(s.duration) || 0),0)/3600);
+                dataP2.push(daySess.filter(s => parseInt(s.priority) === 2).reduce((a,s)=>a+(parseFloat(s.duration) || 0),0)/3600);
+                dataP3.push(daySess.filter(s => parseInt(s.priority) === 3).reduce((a,s)=>a+(parseFloat(s.duration) || 0),0)/3600);
+                dataP4.push(daySess.filter(s => parseInt(s.priority) === 4).reduce((a,s)=>a+(parseFloat(s.duration) || 0),0)/3600);
             }
 
             myChart = new Chart(ctx, {
@@ -707,14 +718,14 @@
 
             for (let day = 1; day <= daysInMonth; day++) {
                 const dayDate = new Date(year, month, day);
-                const daySess = sessions.filter(s => s && s.date && new Date(s.date).toDateString() === dayDate.toDateString());
+                const daySess = sessions.filter(s => s && s.date && parseSessionDate(s.date).toDateString() === dayDate.toDateString());
                 let gradientStr = 'var(--rem)';
-                const totalWorked = daySess.reduce((acc, s)=>acc+s.duration, 0);
+                const totalWorked = daySess.reduce((acc, s)=acc+(parseFloat(s.duration) || 0), 0);
 
                 if (totalWorked > 0) {
                     let acc = 0;
                     const segments = [1,2,3,4].map(p => {
-                        const dur = daySess.filter(s => s.priority === p).reduce((a,s)=>a+s.duration,0);
+                        const dur = daySess.filter(s => parseInt(s.priority) === p).reduce((a,s)=>a+(parseFloat(s.duration) || 0),0);
                         if (dur === 0) return null;
                         const start = (acc / Math.max(goalSeconds, totalWorked)) * 100;
                         acc += dur;
@@ -738,7 +749,7 @@
     function showStats() {
         document.getElementById('mainView').style.display = 'none';
         document.getElementById('statsView').style.display = 'flex';
-        document.getElementById('dateSelector').value = new Date().toISOString().split('T')[0];
+        document.getElementById('dateSelector').value = getLocalYYYYMMDD();
         isStartHourManuallySet = false;
         changeView('day');
     }
