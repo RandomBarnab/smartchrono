@@ -45,11 +45,17 @@
             --input-bg: #f9f9f5;
         }
 
+        /* Protection globale contre les débordements */
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
         body { 
             font-family: 'Segoe UI', -apple-system, sans-serif; 
             background: var(--bg); 
             color: var(--text); 
-            margin: 0; 
             display: flex; 
             justify-content: center; 
             align-items: center; 
@@ -57,7 +63,6 @@
             width: 100vw;
             overflow: hidden; 
             padding: 10px;
-            box-sizing: border-box;
             transition: background 0.3s;
         }
         
@@ -70,7 +75,6 @@
             background: var(--panel); 
             border-radius: 16px; 
             padding: 16px; 
-            box-sizing: border-box; 
             display: flex; 
             flex-direction: column;
             justify-content: space-between;
@@ -93,11 +97,11 @@
         /* Timer Section */
         .timer-row { display: flex; align-items: center; justify-content: space-between; width: 100%; }
         #timer { font-size: 34px; font-weight: bold; font-variant-numeric: tabular-nums; line-height: 1; }
-        #dayTotal { font-size: 16px; font-weight: bold; margin-top: 2px; }
+        #dayTotal { font-size: 18px; font-weight: bold; }
         #estimatedEnd { font-size: 10px; color: var(--muted); margin-top: 2px; font-style: italic; }
         
         /* Barre d'avancement */
-        .progress-wrapper { height: 6px; background: var(--rem); border-radius: 3px; overflow: hidden; display: flex; width: 100%; }
+        .progress-wrapper { height: 6px; background: var(--rem); border-radius: 3px; overflow: hidden; display: flex; width: 100%; margin: 6px 0; }
         .segment { height: 100%; transition: width 0.3s; }
         
         /* Boutons de priorité */
@@ -113,8 +117,10 @@
         /* TODO List Section */
         .todo-section { flex: 1; display: flex; flex-direction: column; min-height: 0; border-top: 1px solid var(--border); padding-top: 8px; }
         .todo-header { display: flex; justify-content: space-between; align-items: center; font-size: 11px; font-weight: bold; margin-bottom: 6px; }
-        .todo-input-container { display: flex; flex-direction: column; gap: 4px; margin-bottom: 6px; background: rgba(0,0,0,0.05); padding: 6px; border-radius: 6px; border: 1px solid var(--border); }
-        .todo-input { width: 100%; background: var(--input-bg); border: 1px solid var(--border); color: var(--text); padding: 4px 8px; border-radius: 4px; font-size: 11px; }
+        
+        /* Conteneur de Saisie Robuste */
+        .todo-input-container { display: flex; flex-direction: column; gap: 6px; margin-bottom: 8px; background: rgba(0,0,0,0.05); padding: 8px; border-radius: 6px; border: 1px solid var(--border); width: 100%; }
+        .todo-input { width: 100%; background: var(--input-bg); border: 1px solid var(--border); color: var(--text); padding: 5px 8px; border-radius: 4px; font-size: 11px; }
         .todo-list { flex: 1; overflow-y: auto; list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 4px; }
         
         /* Liste des tâches épurée */
@@ -123,9 +129,9 @@
         .todo-item.completed span.todo-text { text-decoration: line-through; color: var(--muted); }
         .todo-item.dragging { opacity: 0.4; border: 1px dashed var(--chart-line); }
         
-        /* 2/3 de largeur de ligne pour le titre de tâche */
+        /* 2/3 de largeur de ligne pour le titre de tâche (65%) */
         .todo-left { display: flex; align-items: center; gap: 8px; width: 65%; overflow: hidden; }
-        .todo-text { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex-grow: 1; }
+        .todo-text { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex-grow: 1; text-align: left; }
         .todo-text.expanded { white-space: normal; overflow: visible; text-overflow: clip; word-break: break-word; }
 
         .todo-right { display: flex; align-items: center; gap: 6px; width: 35%; justify-content: flex-end; flex-shrink: 0; }
@@ -139,11 +145,11 @@
         .drag-handle { cursor: grab; color: var(--muted); font-size: 14px; padding-right: 4px; user-select: none; }
         .drag-handle:active { cursor: grabbing; }
 
-        /* TIME PICKER DOUBLE SPINNER H:MIN */
-        .time-picker-row { display: flex; justify-content: space-between; align-items: center; width: 100%; gap: 6px; margin-top: 2px; }
+        /* TIME SPINNER DOUBLE H:MIN */
+        .time-picker-row { display: flex; justify-content: space-between; align-items: center; width: 100%; gap: 6px; }
         .spinner-container { display: flex; align-items: center; gap: 4px; background: var(--input-bg); border: 1px solid var(--border); border-radius: 4px; padding: 2px 4px; }
         .spinner-block { display: flex; align-items: center; gap: 1px; }
-        .spinner-input { width: 16px; background: transparent; border: none; color: var(--text); font-size: 10px; font-weight: bold; text-align: center; -webkit-appearance: none; -moz-appearance: textfield; margin: 0; }
+        .spinner-input { width: 16px; background: transparent; border: none; color: var(--text); font-size: 10px; font-weight: bold; text-align: center; margin: 0; }
         .spinner-input::-webkit-outer-spin-button, .spinner-input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
         .spinner-arrows { display: flex; flex-direction: column; line-height: 0.4; }
         .spin-btn { background: none; border: none; color: var(--muted); cursor: pointer; font-size: 6px; padding: 1px; line-height: 1; }
@@ -190,7 +196,11 @@
                 <div style="font-size: 10px; color: var(--muted); display: flex; align-items: center; gap: 4px;">
                     OBJ : <input type="number" id="goalInput" min="1" max="24" value="7" class="theme-input" onchange="updateGoal(this.value)">H
                 </div>
-                <div id="dayTotal">00:00:00</div>
+                <!-- Pourcentage placé directement à côté du temps cumulé -->
+                <div style="display: flex; align-items: baseline; gap: 6px; margin-top: 2px;">
+                    <span id="dayTotal">00:00:00</span>
+                    <span id="percText" style="font-size: 11px; color: var(--muted); font-weight: bold;">(0%)</span>
+                </div>
                 <div id="estimatedEnd">Fin estimée : --:--</div>
                 <div id="realConcentrationRate" style="font-size: 10px; color: var(--muted); margin-top: 2px; font-weight: bold;">Ratio réel : --%</div>
             </div>
@@ -206,7 +216,6 @@
         <div class="progress-wrapper" id="progressBar"></div>
         <div style="display:flex; justify-content:space-between; font-size: 9px; color: var(--muted);" id="percRow">
             <span id="loadIndicator"></span>
-            <span id="percText">0%</span>
         </div>
 
         <!-- Configuration de l'efficacité de concentration -->
@@ -316,9 +325,9 @@
     let currentView = 'day', myChart = null, sCurveChart = null;
     let isStartHourManuallySet = false;
     let showCompletedTodos = localStorage.getItem('focusShowCompletedTodos') === 'true';
-    let editModeActive = false; // Suivi du mode "Modifier"
+    let editModeActive = false;
     
-    // --- BOUCLIER DE SÉCURITÉ LOCALSTORAGE ---
+    // --- BOUCLIER DE SÉCURITÉ LOCALSTORAGE (Anti-crash absolu) ---
     let sessions = [];
     try {
         const rawSess = localStorage.getItem('focusSessions');
@@ -337,6 +346,19 @@
         if (!Array.isArray(todos)) todos = [];
     } catch(e) { todos = []; }
 
+    // Nettoyage et calibration blindée du LocalStorage
+    todos = todos.map(t => {
+        if (!t || typeof t !== 'object') return null;
+        return {
+            id: t.id ? String(t.id) : Date.now().toString() + Math.random(),
+            text: t.text ? String(t.text) : "Sans titre",
+            priority: parseInt(t.priority) || 4,
+            estimate: parseFloat(t.estimate) || 1.0,
+            worked: parseFloat(t.worked) || 0,
+            completed: !!t.completed
+        };
+    }).filter(Boolean);
+
     let activeTodoId = localStorage.getItem('focusActiveTodoId');
     if (activeTodoId === "null" || activeTodoId === "undefined" || !activeTodoId) {
         activeTodoId = null;
@@ -345,15 +367,6 @@
     document.getElementById('goalInput').value = dailyGoalHours;
     document.getElementById('startHourInput').value = dayStartHour;
     document.getElementById('ratioInput').value = Math.round(concentrationRatio * 100);
-
-    // Calibration des tâches chargées
-    todos.forEach(t => {
-        if (!t) return;
-        if (t.worked === undefined) t.worked = 0;
-        t.worked = parseFloat(t.worked) || 0;
-        t.estimate = parseFloat(t.estimate) || 1.0;
-        t.priority = parseInt(t.priority) || 4;
-    });
 
     function parseSessionDate(dateInput) {
         if (!dateInput) return null;
@@ -426,7 +439,24 @@
         return parseInt(localStorage.getItem('focusStartHour') || '9');
     }
 
-    // --- CONTROLES DU TIME SPINNER (Heures et Minutes séparées) ---
+    function formatTaskWorked(sec) {
+        if (!sec || sec < 0) return "0m";
+        const h = Math.floor(sec / 3600);
+        const m = Math.floor((sec % 3600) / 60);
+        const s = Math.floor(sec % 60);
+        if (h > 0) return `${h}h${String(m).padStart(2, '0')}`;
+        if (m > 0) return `${m}m`;
+        return `${s}s`;
+    }
+
+    function formatHoursMinutes(decimalHours) {
+        const totalMinutes = Math.round(decimalHours * 60);
+        const h = Math.floor(totalMinutes / 60);
+        const m = totalMinutes % 60;
+        return `${h}h${String(m).padStart(2, '0')}`;
+    }
+
+    // --- CONTROLES DU TIME SPINNER (H:MIN) ---
     function adjustNewHours(delta) {
         const hInput = document.getElementById('newHoursInput');
         let val = parseInt(hInput.value) || 0;
@@ -467,7 +497,7 @@
             li.className = `todo-item ${t.completed ? 'completed' : ''} ${t.id == activeTodoId ? 'active-task' : ''}`;
             li.dataset.id = t.id;
 
-            // DRAG & DROP HTML5 intégré sur la ligne
+            // DRAG & DROP HTML5
             if (editModeActive) {
                 li.draggable = true;
                 li.addEventListener('dragstart', (e) => {
@@ -509,7 +539,6 @@
                 liveTimerHtml = `<span>⏱️ ${formatTaskWorked(displaySec)}</span>`;
             }
 
-            // Affichage conditionnel selon le mode "Modifier"
             let leftBlock = '';
             let rightBlock = '';
 
@@ -609,7 +638,7 @@
         const p = parseInt(document.getElementById('todoPriorityInput').value);
         if (!txt) return;
 
-        // Lecture des heures et minutes depuis le double spinner
+        // Lecture des heures et minutes
         const h = parseInt(document.getElementById('newHoursInput').value) || 0;
         const m = parseInt(document.getElementById('newMinsInput').value) || 0;
         const estDecimal = (h * 60 + m) / 60;
@@ -718,7 +747,9 @@
             document.getElementById('dayTotal').textContent = `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
             
             const goalSeconds = dailyGoalHours * 3600;
-            document.getElementById('percText').textContent = Math.min((totalSec / goalSeconds) * 100, 100).toFixed(1) + "%";
+            // Mise à jour du pourcentage placé à côté du dayTotal
+            const percentVal = Math.min((totalSec / goalSeconds) * 100, 100).toFixed(1);
+            document.getElementById('percText').textContent = `(${percentVal}%)`;
             
             const remainingSec = Math.max(0, goalSeconds - totalSec);
             const estEndEl = document.getElementById('estimatedEnd');
@@ -1116,7 +1147,6 @@
     window.adjustNewMins = adjustNewMins;
     window.validateSpinnerInput = validateSpinnerInput;
     window.toggleExpandText = toggleExpandText;
-    window.moveTodo = moveTodo;
     window.editTodo = editTodo;
     window.toggleEditMode = toggleEditMode;
 
@@ -1124,6 +1154,9 @@
     setPriority(4); 
     updateDisplay();
     renderTodos();
+
+    // Initialiser le texte du bouton de masquage
+    document.getElementById('toggleCompletedBtn').textContent = showCompletedTodos ? "Masquer terminées" : "Afficher terminées";
 
     const savedTheme = localStorage.getItem('focusTheme') || 'dark';
     const isLight = savedTheme === 'light';
