@@ -110,8 +110,6 @@
         .p-btn.active { color: white; border-color: transparent; }
         body.light-theme .p-btn.active { color: #333; }
 
-        /* Configuration rapide */
-        .settings-row { display: flex; justify-content: space-between; align-items: center; font-size: 10px; color: var(--muted); gap: 6px; }
         .theme-input { width: 30px; background: var(--input-bg); border: 1px solid var(--border); color: var(--text); border-radius: 4px; text-align: center; padding: 2px; font-size: 10px; }
 
         /* TODO List Section */
@@ -119,7 +117,7 @@
         .todo-header { display: flex; justify-content: space-between; align-items: center; font-size: 11px; font-weight: bold; margin-bottom: 6px; }
         
         /* Conteneur de Saisie Robuste */
-        .todo-input-container { display: flex; flex-direction: column; gap: 6px; margin-bottom: 8px; background: rgba(0,0,0,0.05); padding: 8px; border-radius: 6px; border: 1px solid var(--border); width: 100%; }
+        .todo-input-container { display: flex; flex-direction: column; gap: 6px; margin-bottom: 8px; background: rgba(0,0,0,0.05); padding: 6px; border-radius: 6px; border: 1px solid var(--border); width: 100%; }
         .todo-input { width: 100%; background: var(--input-bg); border: 1px solid var(--border); color: var(--text); padding: 5px 8px; border-radius: 4px; font-size: 11px; }
         .todo-list { flex: 1; overflow-y: auto; list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 4px; }
         
@@ -133,6 +131,11 @@
         .todo-left { display: flex; align-items: center; gap: 8px; width: 65%; overflow: hidden; }
         .todo-text { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex-grow: 1; text-align: left; }
         .todo-text.expanded { white-space: normal; overflow: visible; text-overflow: clip; word-break: break-word; }
+        
+        /* Style d'édition en mode Modifier */
+        body.edit-mode-active .todo-text { border-bottom: 1px dashed var(--muted); cursor: text; }
+        body.edit-mode-active .session-priority { border-bottom: 1px dashed var(--muted); cursor: pointer; }
+        body.edit-mode-active .todo-time-display { border-bottom: 1px dashed var(--muted); cursor: pointer; }
 
         .todo-right { display: flex; align-items: center; gap: 6px; width: 35%; justify-content: flex-end; flex-shrink: 0; }
 
@@ -196,13 +199,18 @@
                 <div style="font-size: 10px; color: var(--muted); display: flex; align-items: center; gap: 4px;">
                     OBJ : <input type="number" id="goalInput" min="1" max="24" value="7" class="theme-input" onchange="updateGoal(this.value)">H
                 </div>
-                <!-- Pourcentage placé directement à côté du temps cumulé -->
                 <div style="display: flex; align-items: baseline; gap: 6px; margin-top: 2px;">
                     <span id="dayTotal">00:00:00</span>
                     <span id="percText" style="font-size: 11px; color: var(--muted); font-weight: bold;">(0%)</span>
                 </div>
                 <div id="estimatedEnd">Fin estimée : --:--</div>
-                <div id="realConcentrationRate" style="font-size: 10px; color: var(--muted); margin-top: 2px; font-weight: bold;">Ratio réel : --%</div>
+                
+                <!-- Ligne de Ratio Prévu / Réel centralisée en haut -->
+                <div style="display: flex; align-items: center; gap: 6px; margin-top: 2px; font-size: 10px; color: var(--muted);">
+                    <div>Ratio : <input type="number" id="ratioInput" min="50" max="100" value="90" class="theme-input" style="width:34px;" onchange="updateRatio(this.value)">%</div>
+                    <span style="color: var(--border);">|</span>
+                    <div id="realConcentrationRate" style="font-weight: bold;">Ratio réel : --%</div>
+                </div>
             </div>
             <div style="display: flex; flex-direction: column; align-items: flex-end;">
                 <div id="timer">00:00:00</div>
@@ -216,12 +224,6 @@
         <div class="progress-wrapper" id="progressBar"></div>
         <div style="display:flex; justify-content:space-between; font-size: 9px; color: var(--muted);" id="percRow">
             <span id="loadIndicator"></span>
-        </div>
-
-        <!-- Configuration de l'efficacité de concentration -->
-        <div class="settings-row">
-            <div>Concentration : <input type="number" id="ratioInput" min="50" max="100" value="90" class="theme-input" style="width:34px;" onchange="updateRatio(this.value)">%</div>
-            <div>Priorité : <span id="activePriorityLabel" style="font-weight:bold; color:var(--p4);">P4</span></div>
         </div>
 
         <div class="controls-grid" id="priorityGrid">
@@ -252,7 +254,7 @@
                         </select>
                     </div>
                     
-                    <!-- TIME SPINNER DOUBLE (H:MIN) AVEC MICRO-FLECHES -->
+                    <!-- TIME SPINNER DOUBLE H:MIN -->
                     <div style="display:flex; align-items:center; gap:4px;">
                         <span style="font-size:9px; color:var(--muted);">Est. :</span>
                         <div class="spinner-container">
@@ -346,7 +348,7 @@
         if (!Array.isArray(todos)) todos = [];
     } catch(e) { todos = []; }
 
-    // Nettoyage et calibration blindée du LocalStorage
+    // Nettoyage et calibration sécurisée du LocalStorage
     todos = todos.map(t => {
         if (!t || typeof t !== 'object') return null;
         return {
@@ -536,7 +538,7 @@
             if (t.id == activeTodoId) {
                 liveTimerHtml = `<span id="live-task-time-span" style="font-weight:bold; color:var(--chart-line);">⏱️ ${formatTaskWorked(displaySec + (isRunning ? elapsed / 1000 : 0))}</span>`;
             } else {
-                liveTimerHtml = `<span>⏱️ ${formatTaskWorked(displaySec)}</span>`;
+                liveTimerHtml = `<span class="todo-time-display" onclick="event.stopPropagation(); editTodoWorked('${t.id}')">⏱️ ${formatTaskWorked(displaySec)}</span>`;
             }
 
             let leftBlock = '';
@@ -545,12 +547,11 @@
             if (editModeActive) {
                 leftBlock = `
                     <span class="drag-handle">⋮</span>
-                    <span class="todo-text" style="max-width: 140px;" onclick="toggleExpandText(this, event)">${t.text}</span>
+                    <span class="todo-text" style="max-width: 140px;" onclick="event.stopPropagation(); editTodoText('${t.id}')">${t.text}</span>
                 `;
                 rightBlock = `
-                    <span class="session-priority" style="background:var(--p${t.priority})">P${t.priority}</span>
-                    <span style="font-size:10px; color:var(--muted); font-weight:bold;">${formatHoursMinutes(t.estimate)}</span>
-                    <button class="icon-btn" onclick="event.stopPropagation(); editTodo('${t.id}')">✏️</button>
+                    <span class="session-priority" style="background:var(--p${t.priority})" onclick="event.stopPropagation(); editTodoPriority('${t.id}')">P${t.priority}</span>
+                    <span class="todo-time-display" style="font-size:10px; color:var(--muted); font-weight:bold;" onclick="event.stopPropagation(); editTodoEstimate('${t.id}')">${formatHoursMinutes(t.estimate)}</span>
                     <button class="icon-btn delete-btn" onclick="event.stopPropagation(); deleteTodo('${t.id}')">✕</button>
                 `;
             } else {
@@ -561,7 +562,7 @@
                 rightBlock = `
                     <span class="session-priority" style="background:var(--p${t.priority})">P${t.priority}</span>
                     <span style="font-size:10px; color:var(--muted); font-weight:bold; font-variant-numeric: tabular-nums; white-space:nowrap;">
-                        ${liveTimerHtml} / ${formatHoursMinutes(t.estimate)}
+                        ${liveTimerHtml} / <span onclick="event.stopPropagation(); editTodoEstimate('${t.id}')">${formatHoursMinutes(t.estimate)}</span>
                     </span>
                 `;
             }
@@ -596,13 +597,54 @@
 
     function toggleEditMode() {
         editModeActive = !editModeActive;
+        document.body.classList.toggle('edit-mode-active', editModeActive);
         const btn = document.getElementById('toggleEditBtn');
         btn.textContent = editModeActive ? "Quitter" : "Modifier";
         btn.style.color = editModeActive ? "var(--p2)" : "var(--muted)";
         renderTodos();
     }
 
-    function editTodo(id) {
+    // --- MODIFICATION D'UNE TÂCHE AU CLIC DES CHAMPS EN MODE MODIFIER ---
+    function editTodoText(id) {
+        const t = todos.find(t => t.id === id);
+        if (!t) return;
+        let newText = prompt("Modifier le nom de la tâche :", t.text);
+        if (newText !== null && newText.trim() !== "") {
+            t.text = newText.trim();
+            localStorage.setItem('focusTodos', JSON.stringify(todos));
+            renderTodos();
+        }
+    }
+
+    function editTodoPriority(id) {
+        const t = todos.find(t => t.id === id);
+        if (!t) return;
+        let newPrioStr = prompt("Modifier la priorité (1, 2, 3 ou 4) :", t.priority);
+        if (newPrioStr === null) return;
+        let newPrio = parseInt(newPrioStr);
+        if (!isNaN(newPrio) && newPrio >= 1 && newPrio <= 4) {
+            t.priority = newPrio;
+            localStorage.setItem('focusTodos', JSON.stringify(todos));
+            renderTodos();
+        }
+    }
+
+    function editTodoWorked(id) {
+        const t = todos.find(t => t.id === id);
+        if (!t) return;
+        let currentMins = Math.round((parseFloat(t.worked) || 0) / 60);
+        let newWorkedStr = prompt("Modifier le temps réalisé sur cette tâche (en minutes) :", currentMins);
+        if (newWorkedStr === null) return;
+        let newWorkedMins = parseFloat(newWorkedStr);
+        if (!isNaN(newWorkedMins) && newWorkedMins >= 0) {
+            t.worked = newWorkedMins * 60;
+            localStorage.setItem('focusTodos', JSON.stringify(todos));
+            renderTodos();
+            updateDayStats();
+        }
+    }
+
+    function editTodoEstimate(id) {
         const t = todos.find(t => t.id === id);
         if (!t) return;
 
@@ -620,13 +662,7 @@
         let newM = parseInt(newMStr);
         if (isNaN(newM) || newM < 0 || newM > 59) return;
 
-        let newPrioStr = prompt(`Modifier la priorité (1, 2, 3 ou 4) :`, t.priority);
-        if (newPrioStr === null) return;
-        let newPrio = parseInt(newPrioStr);
-        if (isNaN(newPrio) || newPrio < 1 || newPrio > 4) return;
-
         t.estimate = ((newH * 60) + newM) / 60;
-        t.priority = newPrio;
 
         localStorage.setItem('focusTodos', JSON.stringify(todos));
         renderTodos();
@@ -638,7 +674,6 @@
         const p = parseInt(document.getElementById('todoPriorityInput').value);
         if (!txt) return;
 
-        // Lecture des heures et minutes
         const h = parseInt(document.getElementById('newHoursInput').value) || 0;
         const m = parseInt(document.getElementById('newMinsInput').value) || 0;
         const estDecimal = (h * 60 + m) / 60;
@@ -747,7 +782,6 @@
             document.getElementById('dayTotal').textContent = `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
             
             const goalSeconds = dailyGoalHours * 3600;
-            // Mise à jour du pourcentage placé à côté du dayTotal
             const percentVal = Math.min((totalSec / goalSeconds) * 100, 100).toFixed(1);
             document.getElementById('percText').textContent = `(${percentVal}%)`;
             
@@ -1010,7 +1044,7 @@
                 }
             });
 
-            // HISTORIQUE DES SESSIONS AVEC EFFACEMENT ET MODIFICATION INDIVIDUELLE
+            // HISTORIQUE DES SESSIONS
             if (daySess.length > 0) {
                 listContainer.innerHTML = '<h4 style="margin:10px 0 5px 0; font-size:12px;">Sessions du jour</h4>';
                 daySess.forEach((s, idx) => {
@@ -1147,8 +1181,11 @@
     window.adjustNewMins = adjustNewMins;
     window.validateSpinnerInput = validateSpinnerInput;
     window.toggleExpandText = toggleExpandText;
-    window.editTodo = editTodo;
     window.toggleEditMode = toggleEditMode;
+    window.editTodoText = editTodoText;
+    window.editTodoPriority = editTodoPriority;
+    window.editTodoWorked = editTodoWorked;
+    window.editTodoEstimate = editTodoEstimate;
 
     // Initialisation
     setPriority(4); 
