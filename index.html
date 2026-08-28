@@ -113,15 +113,32 @@
         /* TODO List Section */
         .todo-section { flex: 1; display: flex; flex-direction: column; min-height: 0; border-top: 1px solid var(--border); padding-top: 8px; }
         .todo-header { display: flex; justify-content: space-between; align-items: center; font-size: 11px; font-weight: bold; margin-bottom: 6px; }
-        .todo-input-container { display: flex; gap: 4px; margin-bottom: 6px; }
-        .todo-input { flex: 1; background: var(--input-bg); border: 1px solid var(--border); color: var(--text); padding: 4px 8px; border-radius: 4px; font-size: 11px; }
+        .todo-input-container { display: flex; flex-direction: column; gap: 4px; margin-bottom: 6px; background: rgba(0,0,0,0.05); padding: 4px; border-radius: 6px; }
+        .todo-input { width: 100%; background: var(--input-bg); border: 1px solid var(--border); color: var(--text); padding: 4px 8px; border-radius: 4px; font-size: 11px; }
         .todo-list { flex: 1; overflow-y: auto; list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 4px; }
         
-        .todo-item { display: flex; align-items: center; justify-content: space-between; background: var(--rem); padding: 6px; border-radius: 4px; border: 1px solid transparent; font-size: 11px; cursor: pointer; }
+        /* Liste des tâches et actions */
+        .todo-item { display: flex; align-items: center; justify-content: space-between; background: var(--rem); padding: 6px; border-radius: 4px; border: 1px solid transparent; font-size: 11px; cursor: pointer; gap: 6px; }
         .todo-item.active-task { border-color: var(--chart-line); }
-        .todo-item.completed span { text-decoration: line-through; color: var(--muted); }
-        .todo-left { display: flex; align-items: center; gap: 6px; overflow: hidden; }
-        .todo-text { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .todo-item.completed span.todo-text { text-decoration: line-through; color: var(--muted); }
+        .todo-left { display: flex; align-items: center; gap: 6px; overflow: hidden; flex: 1; }
+        
+        /* Texte de tâche extensible au clic */
+        .todo-text { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 110px; display: inline-block; vertical-align: middle; transition: all 0.2s ease; }
+        .todo-text.expanded { white-space: normal; overflow: visible; text-overflow: clip; max-width: 100%; word-break: break-word; }
+
+        .todo-right { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
+
+        /* Boutons d'action miniatures */
+        .icon-btn { background: none; border: none; color: var(--text); cursor: pointer; padding: 0 2px; font-size: 10px; font-weight: bold; transition: color 0.2s; }
+        .icon-btn:hover { color: var(--chart-line); }
+        .icon-btn.delete-btn:hover { color: var(--p1); }
+
+        /* Time Picker pour nouvelle tâche */
+        .time-picker-row { display: flex; justify-content: space-between; align-items: center; width: 100%; gap: 4px; }
+        .adjuster-group { display: flex; align-items: center; gap: 2px; }
+        .adjust-btn { background: var(--input-bg); border: 1px solid var(--border); color: var(--text); padding: 2px 4px; border-radius: 4px; font-size: 9px; cursor: pointer; font-weight: bold; }
+        .adjust-btn:hover { background: var(--border); }
 
         /* Actions Footer */
         .actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; width: 100%; }
@@ -202,12 +219,24 @@
                 <span id="todoTotalTime" style="font-weight: normal; color: var(--muted);">Est: 0h</span>
             </div>
             <div class="todo-input-container">
-                <input type="text" id="todoTextInput" placeholder="Nouvelle tâche..." class="todo-input">
-                <select id="todoPriorityInput" class="theme-input" style="width: 40px;">
-                    <option value="1">P1</option><option value="2">P2</option><option value="3">P3</option><option value="4" selected>P4</option>
-                </select>
-                <input type="number" id="todoEstInput" placeholder="Est. (h)" min="0.5" step="0.5" class="theme-input" style="width: 45px;">
-                <button onclick="addTodo()" class="action" style="padding:4px 8px; font-size:11px;">+</button>
+                <input type="text" id="todoTextInput" placeholder="Nouvelle tâche..." class="todo-input" style="margin-bottom:4px;">
+                <div class="time-picker-row">
+                    <div style="display:flex; align-items:center; gap:4px;">
+                        <span style="font-size:10px; color:var(--muted);">Prio :</span>
+                        <select id="todoPriorityInput" class="theme-input" style="width: 40px;">
+                            <option value="1">P1</option><option value="2">P2</option><option value="3">P3</option><option value="4" selected>P4</option>
+                        </select>
+                    </div>
+                    <!-- Sélecteur H:Min incrémental -->
+                    <div class="adjuster-group">
+                        <button onclick="adjustNewEst(-60)" class="adjust-btn">-1h</button>
+                        <button onclick="adjustNewEst(-15)" class="adjust-btn">-15m</button>
+                        <span id="estTimeDisplay" style="font-size:10px; font-weight:bold; min-width:38px; text-align:center;">1h00</span>
+                        <button onclick="adjustNewEst(15)" class="adjust-btn">+15m</button>
+                        <button onclick="adjustNewEst(60)" class="adjust-btn">+1h</button>
+                    </div>
+                    <button onclick="addTodo()" class="action" style="padding:2px 8px; font-size:11px; width:auto;">+</button>
+                </div>
             </div>
             <ul class="todo-list" id="todoList"></ul>
         </div>
@@ -254,6 +283,7 @@
     let currentView = 'day', myChart = null, sCurveChart = null;
     let isStartHourManuallySet = false;
     let showCompletedTodos = localStorage.getItem('focusShowCompletedTodos') === 'true';
+    let newEstMinutes = 60; // 1h00 par défaut
     
     // --- BOUCLIER DE SÉCURITÉ LOCALSTORAGE ---
     let sessions = [];
@@ -283,7 +313,7 @@
     document.getElementById('startHourInput').value = dayStartHour;
     document.getElementById('ratioInput').value = Math.round(concentrationRatio * 100);
 
-    // Nettoyage et calibration sécurisée des tâches chargées
+    // Nettoyage et calibration des tâches chargées
     todos.forEach(t => {
         if (!t) return;
         if (t.worked === undefined) t.worked = 0;
@@ -302,7 +332,7 @@
         return isNaN(d.getTime()) ? null : d;
     }
 
-    // Générateur de date locale sans décalage de fuseau horaire
+    // Générateur de date locale sans décalage
     function getLocalYYYYMMDD(dateObj) {
         const d = dateObj || new Date();
         const yyyy = d.getFullYear();
@@ -379,6 +409,21 @@
         return `${s}s`;
     }
 
+    function formatHoursMinutes(decimalHours) {
+        const totalMinutes = Math.round(decimalHours * 60);
+        const h = Math.floor(totalMinutes / 60);
+        const m = totalMinutes % 60;
+        return `${h}h${String(m).padStart(2, '0')}`;
+    }
+
+    // --- REGLAGE ESTIMATION NOUVELLE TACHE ---
+    function adjustNewEst(minutesDelta) {
+        newEstMinutes = Math.max(15, newEstMinutes + minutesDelta); // 15 min minimum
+        const h = Math.floor(newEstMinutes / 60);
+        const m = newEstMinutes % 60;
+        document.getElementById('estTimeDisplay').textContent = `${h}h${String(m).padStart(2, '0')}`;
+    }
+
     // --- TO-DO LIST ENGINE ---
     function renderTodos() {
         const list = document.getElementById('todoList');
@@ -411,14 +456,20 @@
             li.innerHTML = `
                 <div class="todo-left">
                     <input type="checkbox" ${t.completed ? 'checked' : ''} onclick="event.stopPropagation(); toggleTodoDone('${t.id}')">
-                    <span class="todo-text">${t.text}</span>
+                    <!-- Cliquer sur le texte permet de dérouler/enrouler le nom si long -->
+                    <span class="todo-text" onclick="toggleExpandText(this, event)">${t.text}</span>
                 </div>
-                <div style="display:flex; align-items:center; gap:6px;">
+                <div class="todo-right">
                     <span class="session-priority" style="background:var(--p${t.priority})">P${t.priority}</span>
-                    <span style="font-size:10px; color:var(--muted); font-weight:bold; font-variant-numeric: tabular-nums; white-space:nowrap;">
-                        ${liveTimerHtml} / ${t.estimate}h
+                    <span style="font-size:10px; color:var(--muted); font-weight:bold; font-variant-numeric: tabular-nums; white-space:nowrap; margin-right:4px;">
+                        ${liveTimerHtml} / ${formatHoursMinutes(t.estimate)}
                     </span>
-                    <button onclick="event.stopPropagation(); deleteTodo('${t.id}')" style="background:none; border:none; color:var(--p1); cursor:pointer; font-weight:bold;">✕</button>
+                    <!-- Réorganisation flèches ▲ et ▼ -->
+                    <button class="icon-btn" onclick="event.stopPropagation(); moveTodo('${t.id}', -1)" title="Monter">▲</button>
+                    <button class="icon-btn" onclick="event.stopPropagation(); moveTodo('${t.id}', 1)" title="Descendre">▼</button>
+                    <!-- Édition et Suppression -->
+                    <button class="icon-btn" onclick="event.stopPropagation(); editTodo('${t.id}')" title="Modifier">✏️</button>
+                    <button class="icon-btn delete-btn" onclick="event.stopPropagation(); deleteTodo('${t.id}')" title="Supprimer">✕</button>
                 </div>
             `;
             list.appendChild(li);
@@ -433,6 +484,62 @@
         }
     }
 
+    // Dérouler le texte
+    function toggleExpandText(element, event) {
+        event.stopPropagation();
+        element.classList.toggle('expanded');
+    }
+
+    // Réorganiser les tâches
+    function moveTodo(id, direction) {
+        const index = todos.findIndex(t => t.id === id);
+        if (index === -1) return;
+        const newIndex = index + direction;
+        if (newIndex < 0 || newIndex >= todos.length) return;
+        
+        // Swap
+        const temp = todos[index];
+        todos[index] = todos[newIndex];
+        todos[newIndex] = temp;
+        
+        localStorage.setItem('focusTodos', JSON.stringify(todos));
+        renderTodos();
+    }
+
+    // Modifier l'estimation et la priorité d'une tâche
+    function editTodo(id) {
+        const t = todos.find(t => t.id === id);
+        if (!t) return;
+
+        const currentTotalMin = Math.round(t.estimate * 60);
+        const currentHours = Math.floor(currentTotalMin / 60);
+        const currentMins = currentTotalMin % 60;
+
+        let newHStr = prompt(`Modifier l'estimation d'Heures pour "${t.text}" :`, currentHours);
+        if (newHStr === null) return;
+        let newH = parseInt(newHStr);
+        if (isNaN(newH) || newH < 0) return;
+
+        let newMStr = prompt(`Modifier l'estimation de Minutes (0, 15, 30, 45) :`, currentMins);
+        if (newMStr === null) return;
+        let newM = parseInt(newMStr);
+        if (isNaN(newM) || newM < 0 || newM > 59) return;
+
+        let newPrioStr = prompt(`Modifier la priorité (1, 2, 3 ou 4) :`, t.priority);
+        if (newPrioStr === null) return;
+        let newPrio = parseInt(newPrioStr);
+        if (isNaN(newPrio) || newPrio < 1 || newPrio > 4) return;
+
+        // Validation et sauvegarde (conversion en heures décimales)
+        const totalNewMin = (newH * 60) + newM;
+        t.estimate = Math.max(0.25, totalNewMin / 60); // 15 min min.
+        t.priority = newPrio;
+
+        localStorage.setItem('focusTodos', JSON.stringify(todos));
+        renderTodos();
+        updateDayStats();
+    }
+
     function toggleCompletedVisibility() {
         showCompletedTodos = !showCompletedTodos;
         localStorage.setItem('focusShowCompletedTodos', showCompletedTodos);
@@ -442,14 +549,15 @@
 
     function addTodo() {
         const txt = document.getElementById('todoTextInput').value.trim();
-        const est = parseFloat(document.getElementById('todoEstInput').value) || 1.0;
         const p = parseInt(document.getElementById('todoPriorityInput').value);
         if (!txt) return;
 
-        todos.push({ id: Date.now().toString(), text: txt, priority: p, estimate: est, worked: 0, completed: false });
+        // Enregistrement de l'estimation en heures décimales
+        const estDecimal = newEstMinutes / 60;
+
+        todos.push({ id: Date.now().toString(), text: txt, priority: p, estimate: estDecimal, worked: 0, completed: false });
         localStorage.setItem('focusTodos', JSON.stringify(todos));
         document.getElementById('todoTextInput').value = '';
-        document.getElementById('todoEstInput').value = '';
         renderTodos();
     }
 
@@ -669,7 +777,7 @@
 
         let currentMinutes = (parseFloat(s.duration) || 0) / 60;
         let newMin = prompt("Modifier la durée de cette session (en minutes) :", currentMinutes.toFixed(1));
-        if (newMin === null) return; // Annulation
+        if (newMin === null) return;
 
         let parsedMin = parseFloat(newMin);
         if (isNaN(parsedMin) || parsedMin < 0) {
@@ -678,7 +786,7 @@
         }
 
         let newPrio = prompt("Modifier la priorité (1, 2, 3 ou 4) :", s.priority);
-        if (newPrio === null) return; // Annulation
+        if (newPrio === null) return;
 
         let parsedPrio = parseInt(newPrio);
         if (isNaN(parsedPrio) || parsedPrio < 1 || parsedPrio > 4) {
@@ -686,7 +794,7 @@
             return;
         }
 
-        // Enregistrer la correction
+        // Sauvegarde
         s.duration = parsedMin * 60;
         s.priority = parsedPrio;
 
@@ -943,7 +1051,7 @@
         document.getElementById('statsView').style.display = 'none';
     }
 
-    // --- ATTACHEMENT GLOBAL AU WINDOW (Garantit le bon fonctionnement sur Edge et Safari) ---
+    // --- ATTACHEMENT GLOBAL AU WINDOW ---
     window.setPriority = setPriority;
     window.toggleTheme = toggleTheme;
     window.updateGoal = updateGoal;
@@ -960,6 +1068,10 @@
     window.deleteSession = deleteSession;
     window.editSession = editSession;
     window.toggleCompletedVisibility = toggleCompletedVisibility;
+    window.adjustNewEst = adjustNewEst;
+    window.toggleExpandText = toggleExpandText;
+    window.moveTodo = moveTodo;
+    window.editTodo = editTodo;
 
     // Initialisation
     setPriority(4); 
@@ -976,3 +1088,4 @@
 </script>
 </body>
 </html>
+```
