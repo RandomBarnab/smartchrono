@@ -460,6 +460,7 @@
     let currentView = 'day', myChart = null, sCurveChart = null;
     let isStartHourManuallySet = false;
     let showCompletedTodos = localStorage.getItem('focusShowCompletedTodos') === 'true';
+    let showPostponedTodos = localStorage.getItem('focusShowPostponedTodos') === 'true';
     let editModeActive = false;
     
     // --- BOUCLIER DE SÉCURITÉ LOCALSTORAGE (Anti-crash absolu) ---
@@ -1377,7 +1378,6 @@
     let currentTaskView = 'stats';
     let taskChart = null;
     let taskTimeChart = null;
-    let showPostponedTodos = localStorage.getItem('focusShowPostponedTodos') === 'true';
 
     function getTomorrowDateStr() {
         const d = new Date();
