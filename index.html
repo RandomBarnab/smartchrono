@@ -7,397 +7,7 @@
     <!-- Favicon intégré -->
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><circle cx='50' cy='50' r='40' fill='none' stroke='%23ffffff' stroke-width='8'/><line x1='50' y1='50' x2='50' y2='30' stroke='%23ffffff' stroke-width='8'/></svg>">
     <!-- Chart.js pour les graphiques -->
-    <script src="https://cdn.jsdelivr.net/npm/chart.js">
-    // --- NOUVELLES FONCTIONS DE GESTION DE TÂCHES HISTORIQUES & REPORTS ---
-    let currentTaskView = 'stats';
-    let taskChart = null;
-    let taskTimeChart = null;
-
-    function getTomorrowDateStr() {
-        const d = new Date();
-        d.setDate(d.getDate() + 1);
-        return getLocalYYYYMMDD(d);
-    }
-
-    function exportData() {
-        const data = {
-            focusShowCompletedTodos: localStorage.getItem('focusShowCompletedTodos'),
-            focusSessions: localStorage.getItem('focusSessions'),
-            focusDailyGoal: localStorage.getItem('focusDailyGoal'),
-            focusStartHour: localStorage.getItem('focusStartHour'),
-            focusRatio: localStorage.getItem('focusRatio'),
-            focusTodos: localStorage.getItem('focusTodos'),
-            focusActiveTodoId: localStorage.getItem('focusActiveTodoId'),
-            focusTheme: localStorage.getItem('focusTheme')
-        };
-        const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `focus_meter_backup_${new Date().toISOString().slice(0,10)}.json`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-    }
-
-    function importData() {
-        const input = document.createElement('input');
-        input.type = 'file';
-        input.accept = '.json';
-        input.onchange = (e) => {
-            const file = e.target.files[0];
-            if (!file) return;
-            const reader = new FileReader();
-            reader.onload = (evt) => {
-                try {
-                    const data = JSON.parse(evt.target.result);
-                    if (data.focusSessions !== undefined) {
-                        for (const key in data) {
-                            if (data[key] !== null) {
-                                localStorage.setItem(key, data[key]);
-                            }
-                        }
-                        alert("Données importées avec succès ! Rechargement de la page...");
-                        location.reload();
-                    } else {
-                        alert("Format de fichier invalide.");
-                    }
-                } catch (err) {
-                    alert("Erreur lors de l'importation : " + err.message);
-                }
-            };
-            reader.readAsText(file);
-        };
-        input.click();
-    }
-
-    function postponeTodo(id) {
-        const t = todos.find(todo => todo.id === id);
-        if (!t) return;
-        t.postponeCount = (t.postponeCount || 0) + 1;
-        t.postponedUntil = getTomorrowDateStr();
-        localStorage.setItem('focusTodos', JSON.stringify(todos));
-        
-        if (activeTodoId === id) {
-            activeTodoId = null;
-            localStorage.setItem('focusActiveTodoId', activeTodoId);
-        }
-        
-        if (t.postponeCount >= 3) {
-            alert(`🗑️ DECHET MENTAL : La tâche "${t.text}" a été reportée 3 fois ou plus ! Elle apparaît désormais comme un déchet qu'il faut absolument éliminer de votre esprit d'ici 24 heures (la subdiviser, la déléguer ou la supprimer).`);
-        }
-        
-        renderTodos();
-        if (document.getElementById('statsView').style.display === 'flex' && document.getElementById('tasksAnalysisSection').style.display === 'flex') {
-            renderTaskView();
-        }
-    }
-
-    function splitTodo(id) {
-        const t = todos.find(todo => todo.id === id);
-        if (!t) return;
-        const input = prompt(`Diviser "${t.text}" en plusieurs sous-tâches (séparez par des virgules) :`, `${t.text} - Partie 1, ${t.text} - Partie 2`);
-        if (input) {
-            const parts = input.split(',').map(s => s.trim()).filter(Boolean);
-            if (parts.length > 0) {
-                const partEstimate = Math.max(0.25, Math.round((t.estimate / parts.length) * 4) / 4);
-                parts.forEach(part => {
-                    todos.push({
-                        id: Date.now().toString() + Math.random(),
-                        text: part,
-                        priority: t.priority,
-                        estimate: partEstimate,
-                        worked: 0,
-                        completed: false,
-                        postponeCount: 0,
-                        postponedUntil: null
-                    });
-                });
-                todos = todos.filter(todo => todo.id !== id);
-                if (activeTodoId === id) activeTodoId = null;
-                localStorage.setItem('focusTodos', JSON.stringify(todos));
-                localStorage.setItem('focusActiveTodoId', activeTodoId);
-                renderTodos();
-                if (document.getElementById('statsView').style.display === 'flex') {
-                    renderTaskView();
-                }
-            }
-        }
-    }
-
-    function delegateTodo(id) {
-        const t = todos.find(todo => todo.id === id);
-        if (!t) return;
-        const newText = prompt(`Modifier / Déléguer la tâche "${t.text}" :`, t.text);
-        if (newText !== null) {
-            t.text = newText.trim() || t.text;
-            t.postponeCount = 0; // On réinitialise car elle a changé de forme
-            t.postponedUntil = null;
-            localStorage.setItem('focusTodos', JSON.stringify(todos));
-            renderTodos();
-            if (document.getElementById('statsView').style.display === 'flex') {
-                renderTaskView();
-            }
-        }
-    }
-
-    function setAnalysisTab(tab) {
-        const focusBtn = document.getElementById('analysis-focus-btn');
-        const tasksBtn = document.getElementById('analysis-tasks-btn');
-        const focusSection = document.getElementById('focusAnalysisSection');
-        const tasksSection = document.getElementById('tasksAnalysisSection');
-        
-        if (tab === 'focus') {
-            focusBtn.classList.add('active');
-            tasksBtn.classList.remove('active');
-            focusSection.style.display = 'flex';
-            tasksSection.style.display = 'none';
-            renderCharts();
-        } else {
-            focusBtn.classList.remove('active');
-            tasksBtn.classList.add('active');
-            focusSection.style.display = 'none';
-            tasksSection.style.display = 'flex';
-            renderTaskView();
-        }
-    }
-
-    function changeTaskView(view) {
-        currentTaskView = view;
-        ['stats', 'history', 'postponed'].forEach(v => {
-            const btn = document.getElementById(`task-tab-${v}`);
-            if (v === view) btn.classList.add('active');
-            else btn.classList.remove('active');
-        });
-        renderTaskView();
-    }
-
-    function deleteTodoAndRefreshHistory(id) {
-        deleteTodo(id);
-        renderTaskView();
-    }
-
-    function deleteTodoAndRefreshPostponed(id) {
-        deleteTodo(id);
-        renderTaskView();
-    }
-
-    function splitTodoAndRefresh(id) {
-        splitTodo(id);
-        renderTaskView();
-    }
-
-    function delegateTodoAndRefresh(id) {
-        delegateTodo(id);
-        renderTaskView();
-    }
-
-    function reactivateTodo(id) {
-        const t = todos.find(todo => todo.id === id);
-        if (t) {
-            t.postponedUntil = null;
-            localStorage.setItem('focusTodos', JSON.stringify(todos));
-            renderTodos();
-            renderTaskView();
-        }
-    }
-
-    function renderTaskView() {
-        const container = document.getElementById('tasksScrollContainer');
-        container.innerHTML = '';
-        
-        if (taskChart) { taskChart.destroy(); taskChart = null; }
-        if (taskTimeChart) { taskTimeChart.destroy(); taskTimeChart = null; }
-        
-        if (currentTaskView === 'stats') {
-            const total = todos.length;
-            const completed = todos.filter(t => t.completed).length;
-            const active = todos.filter(t => !t.completed && (!t.postponedUntil || t.postponedUntil <= getLocalYYYYMMDD())).length;
-            const postponed = todos.filter(t => !t.completed && t.postponedUntil && t.postponedUntil > getLocalYYYYMMDD()).length;
-            
-            const totalWorkedSec = todos.reduce((acc, t) => acc + (parseFloat(t.worked) || 0), 0);
-            const totalWorkedHrs = (totalWorkedSec / 3600).toFixed(1);
-            const mentalWasteCount = todos.filter(t => !t.completed && (t.postponeCount || 0) >= 3).length;
-            
-            const metricsHtml = `
-                <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px; margin-bottom: 6px;">
-                    <div style="background: var(--rem); border: 1px solid var(--border); padding: 6px; border-radius: 6px; text-align: center;">
-                        <div style="font-size: 8px; color: var(--muted); text-transform: uppercase;">Réalisées</div>
-                        <div style="font-size: 13px; font-weight: bold; color: var(--p4);">${completed} / ${total}</div>
-                    </div>
-                    <div style="background: var(--rem); border: 1px solid var(--border); padding: 6px; border-radius: 6px; text-align: center;">
-                        <div style="font-size: 8px; color: var(--muted); text-transform: uppercase;">Temps Tâches</div>
-                        <div style="font-size: 13px; font-weight: bold; color: var(--chart-line);">${totalWorkedHrs}h</div>
-                    </div>
-                    <div style="background: var(--rem); border: 1px solid var(--border); padding: 6px; border-radius: 6px; text-align: center;">
-                        <div style="font-size: 8px; color: var(--muted); text-transform: uppercase;">Actives / Reportées</div>
-                        <div style="font-size: 13px; font-weight: bold; color: var(--p2);">${active} / ${postponed}</div>
-                    </div>
-                    <div style="background: var(--rem); border: 1px solid var(--border); padding: 6px; border-radius: 6px; text-align: center;">
-                        <div style="font-size: 8px; color: var(--muted); text-transform: uppercase;">Déchets mentaux 🗑️</div>
-                        <div style="font-size: 13px; font-weight: bold; color: var(--p1);">${mentalWasteCount}</div>
-                    </div>
-                </div>
-            `;
-            
-            const canvasHtml = `
-                <div class="canvas-wrapper" style="height: 120px; margin-bottom: 6px;">
-                    <canvas id="taskDistributionChart"></canvas>
-                </div>
-                <div class="canvas-wrapper" style="height: 120px;">
-                    <canvas id="taskTimeChart"></canvas>
-                </div>
-            `;
-            
-            container.innerHTML = metricsHtml + canvasHtml;
-            
-            // Graphique 1 : Nombre de tâches par priorité
-            const pCounts = [1, 2, 3, 4].map(p => todos.filter(t => t.priority === p).length);
-            const ctx1 = document.getElementById('taskDistributionChart').getContext('2d');
-            
-            taskChart = new Chart(ctx1, {
-                type: 'bar',
-                data: {
-                    labels: ['P1', 'P2', 'P3', 'P4'],
-                    datasets: [{
-                        label: 'Nombre de tâches',
-                        data: pCounts,
-                        backgroundColor: [
-                            getThemeColor('--p1'),
-                            getThemeColor('--p2'),
-                            getThemeColor('--p3'),
-                            getThemeColor('--p4')
-                        ],
-                        borderWidth: 0,
-                        borderRadius: 4
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        legend: { display: false },
-                        title: {
-                            display: true,
-                            text: 'Volume de tâches par priorité',
-                            color: getThemeColor('--text'),
-                            font: { size: 9, weight: 'bold' }
-                        }
-                    },
-                    scales: {
-                        x: { grid: { display: false }, ticks: { color: getThemeColor('--muted'), font: { size: 8 } } },
-                        y: { grid: { color: getThemeColor('--border') }, ticks: { color: getThemeColor('--muted'), font: { size: 8 }, stepSize: 1 } }
-                    }
-                }
-            });
-            
-            // Graphique 2 : Temps cumulé par priorité
-            const pTime = [1, 2, 3, 4].map(p => {
-                const sec = todos.filter(t => t.priority === p).reduce((acc, t) => acc + (parseFloat(t.worked) || 0), 0);
-                return (sec / 3600);
-            });
-            
-            const ctx2 = document.getElementById('taskTimeChart').getContext('2d');
-            taskTimeChart = new Chart(ctx2, {
-                type: 'doughnut',
-                data: {
-                    labels: ['P1', 'P2', 'P3', 'P4'],
-                    datasets: [{
-                        data: pTime,
-                        backgroundColor: [
-                            getThemeColor('--p1'),
-                            getThemeColor('--p2'),
-                            getThemeColor('--p3'),
-                            getThemeColor('--p4')
-                        ],
-                        borderWidth: 1,
-                        borderColor: getThemeColor('--panel')
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        legend: {
-                            position: 'right',
-                            labels: { color: getThemeColor('--text'), font: { size: 8 }, boxWidth: 8 }
-                        },
-                        title: {
-                            display: true,
-                            text: 'Temps passé par priorité (heures)',
-                            color: getThemeColor('--text'),
-                            font: { size: 9, weight: 'bold' }
-                        }
-                    }
-                }
-            });
-            
-        } else if (currentTaskView === 'history') {
-            const completedTodos = todos.filter(t => t.completed);
-            if (completedTodos.length === 0) {
-                container.innerHTML = `<div style="text-align: center; color: var(--muted); font-size: 10px; padding: 20px;">Aucune tâche terminée dans l'historique.</div>`;
-                return;
-            }
-            
-            let html = '<div style="display:flex; flex-direction:column; gap:4px; max-height:280px; overflow-y:auto; padding-right:2px;">';
-            completedTodos.forEach(t => {
-                html += `
-                    <div style="display:flex; justify-content:space-between; align-items:center; background:var(--rem); padding:6px 8px; border-radius:6px; border:1px solid var(--border); font-size:10px;">
-                        <div style="display:flex; flex-direction:column; overflow:hidden; gap:1px; flex-grow:1; text-align:left;">
-                            <span style="text-decoration:line-through; color:var(--muted); text-overflow:ellipsis; overflow:hidden; white-space:nowrap; max-width:180px;">${t.text}</span>
-                            <span style="font-size:7px; color:var(--muted);">Fait en ${formatTaskWorked(t.worked)}</span>
-                        </div>
-                        <div style="display:flex; align-items:center; gap:4px;">
-                            <span class="session-priority" style="background:var(--p${t.priority}); font-size:8px; padding:1px 4px; border-radius:3px;">P${t.priority}</span>
-                            <button class="icon-btn delete-btn" onclick="event.stopPropagation(); deleteTodoAndRefreshHistory('${t.id}')">✕</button>
-                        </div>
-                    </div>
-                `;
-            });
-            html += '</div>';
-            container.innerHTML = html;
-            
-        } else if (currentTaskView === 'postponed') {
-            const postponedTodos = todos.filter(t => !t.completed && (t.postponeCount > 0 || (t.postponedUntil && t.postponedUntil > getLocalYYYYMMDD())));
-            if (postponedTodos.length === 0) {
-                container.innerHTML = `<div style="text-align: center; color: var(--muted); font-size: 10px; padding: 20px;">Aucune tâche reportée.</div>`;
-                return;
-            }
-            
-            let html = '<div style="display:flex; flex-direction:column; gap:4px; max-height:280px; overflow-y:auto; padding-right:2px;">';
-            postponedTodos.forEach(t => {
-                const isWaste = t.postponeCount >= 3;
-                const cardBg = isWaste ? 'linear-gradient(135deg, #2c1a1a 0%, #1e1e1e 100%)' : 'var(--rem)';
-                const borderCol = isWaste ? '#ff4d4d' : 'var(--border)';
-                const textColor = isWaste ? '#ff4d4d' : 'var(--text)';
-                
-                html += `
-                    <div style="display:flex; flex-direction:column; background:${cardBg}; padding:8px; border-radius:6px; border:1px solid ${borderCol}; font-size:10px; gap:4px; text-align:left;">
-                        <div style="display:flex; justify-content:space-between; align-items:center;">
-                            <div style="display:flex; flex-direction:column; overflow:hidden; gap:2px; flex-grow:1;">
-                                <span style="font-weight:bold; color:${textColor}; text-overflow:ellipsis; overflow:hidden; white-space:nowrap; max-width:180px;">
-                                    ${isWaste ? '⚠️ ' : ''}${t.text}
-                                </span>
-                                <span style="font-size:8px; color:var(--muted);">Reporté : ${t.postponeCount} fois ${t.postponedUntil ? `(jusqu'au ${t.postponedUntil})` : ''}</span>
-                            </div>
-                            <span class="session-priority" style="background:var(--p${t.priority})">P${t.priority}</span>
-                        </div>
-                        <div style="display:flex; gap:4px; justify-content:flex-end; margin-top:2px;">
-                            <button class="waste-action-btn" onclick="event.stopPropagation(); splitTodoAndRefresh('${t.id}')">✂️ Diviser</button>
-                            <button class="waste-action-btn" onclick="event.stopPropagation(); delegateTodoAndRefresh('${t.id}')">✏️ Modif/Déléguer</button>
-                            <button class="waste-action-btn" onclick="event.stopPropagation(); reactivateTodo('${t.id}')">⚡ Réactiver</button>
-                            <button class="waste-action-btn" onclick="event.stopPropagation(); deleteTodoAndRefreshPostponed('${t.id}')">🗑️ Jeter</button>
-                        </div>
-                    </div>
-                `;
-            });
-            html += '</div>';
-            container.innerHTML = html;
-        }
-    }
-
-</script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         /* Variables de Thème (Thème Sombre par défaut) */
         :root { 
@@ -1712,6 +1322,7 @@
     document.getElementById('themeToggle').checked = isLight;
     toggleTheme(isLight);
 
+
     // --- NOUVELLES FONCTIONS DE GESTION DE TÂCHES HISTORIQUES & REPORTS ---
     let currentTaskView = 'stats';
     let taskChart = null;
@@ -2050,4 +1661,71 @@
                     <div style="display:flex; justify-content:space-between; align-items:center; background:var(--rem); padding:6px 8px; border-radius:6px; border:1px solid var(--border); font-size:10px;">
                         <div style="display:flex; flex-direction:column; overflow:hidden; gap:1px; flex-grow:1; text-align:left;">
                             <span style="text-decoration:line-through; color:var(--muted); text-overflow:ellipsis; overflow:hidden; white-space:nowrap; max-width:180px;">${t.text}</span>
-                            <span style="font-size:7px; color:var(--muted);">Fait en 
+                            <span style="font-size:7px; color:var(--muted);">Fait en ${formatTaskWorked(t.worked)}</span>
+                        </div>
+                        <div style="display:flex; align-items:center; gap:4px;">
+                            <span class="session-priority" style="background:var(--p${t.priority}); font-size:8px; padding:1px 4px; border-radius:3px;">P${t.priority}</span>
+                            <button class="icon-btn delete-btn" onclick="event.stopPropagation(); deleteTodoAndRefreshHistory('${t.id}')">✕</button>
+                        </div>
+                    </div>
+                `;
+            });
+            html += '</div>';
+            container.innerHTML = html;
+            
+        } else if (currentTaskView === 'postponed') {
+            const postponedTodos = todos.filter(t => !t.completed && (t.postponeCount > 0 || (t.postponedUntil && t.postponedUntil > getLocalYYYYMMDD())));
+            if (postponedTodos.length === 0) {
+                container.innerHTML = `<div style="text-align: center; color: var(--muted); font-size: 10px; padding: 20px;">Aucune tâche reportée.</div>`;
+                return;
+            }
+            
+            let html = '<div style="display:flex; flex-direction:column; gap:4px; max-height:280px; overflow-y:auto; padding-right:2px;">';
+            postponedTodos.forEach(t => {
+                const isWaste = t.postponeCount >= 3;
+                const cardBg = isWaste ? 'linear-gradient(135deg, #2c1a1a 0%, #1e1e1e 100%)' : 'var(--rem)';
+                const borderCol = isWaste ? '#ff4d4d' : 'var(--border)';
+                const textColor = isWaste ? '#ff4d4d' : 'var(--text)';
+                
+                html += `
+                    <div style="display:flex; flex-direction:column; background:${cardBg}; padding:8px; border-radius:6px; border:1px solid ${borderCol}; font-size:10px; gap:4px; text-align:left;">
+                        <div style="display:flex; justify-content:space-between; align-items:center;">
+                            <div style="display:flex; flex-direction:column; overflow:hidden; gap:2px; flex-grow:1;">
+                                <span style="font-weight:bold; color:${textColor}; text-overflow:ellipsis; overflow:hidden; white-space:nowrap; max-width:180px;">
+                                    ${isWaste ? '⚠️ ' : ''}${t.text}
+                                </span>
+                                <span style="font-size:8px; color:var(--muted);">Reporté : ${t.postponeCount} fois ${t.postponedUntil ? `(jusqu'au ${t.postponedUntil})` : ''}</span>
+                            </div>
+                            <span class="session-priority" style="background:var(--p${t.priority})">P${t.priority}</span>
+                        </div>
+                        <div style="display:flex; gap:4px; justify-content:flex-end; margin-top:2px;">
+                            <button class="waste-action-btn" onclick="event.stopPropagation(); splitTodoAndRefresh('${t.id}')">✂️ Diviser</button>
+                            <button class="waste-action-btn" onclick="event.stopPropagation(); delegateTodoAndRefresh('${t.id}')">✏️ Modif/Déléguer</button>
+                            <button class="waste-action-btn" onclick="event.stopPropagation(); reactivateTodo('${t.id}')">⚡ Réactiver</button>
+                            <button class="waste-action-btn" onclick="event.stopPropagation(); deleteTodoAndRefreshPostponed('${t.id}')">🗑️ Jeter</button>
+                        </div>
+                    </div>
+                `;
+            });
+            html += '</div>';
+            container.innerHTML = html;
+        }
+    }
+
+    // Attachment de nos nouvelles fonctions à window pour qu'elles soient appelées depuis le HTML
+    window.exportData = exportData;
+    window.importData = importData;
+    window.postponeTodo = postponeTodo;
+    window.splitTodo = splitTodo;
+    window.delegateTodo = delegateTodo;
+    window.setAnalysisTab = setAnalysisTab;
+    window.changeTaskView = changeTaskView;
+    window.deleteTodoAndRefreshHistory = deleteTodoAndRefreshHistory;
+    window.deleteTodoAndRefreshPostponed = deleteTodoAndRefreshPostponed;
+    window.splitTodoAndRefresh = splitTodoAndRefresh;
+    window.delegateTodoAndRefresh = delegateTodoAndRefresh;
+    window.reactivateTodo = reactivateTodo;
+
+</script>
+</body>
+</html>
