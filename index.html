@@ -1,4 +1,173 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Focus Meter Pro</title>
+    <!-- Favicon intégré -->
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><circle cx='50' cy='50' r='40' fill='none' stroke='%23ffffff' stroke-width='8'/><line x1='50' y1='50' x2='50' y2='30' stroke='%23ffffff' stroke-width='8'/></svg>">
+    <!-- Chart.js pour les graphiques -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        /* Variables de Thème (Thème Sombre par défaut) */
+        :root { 
+            --bg: #121212; 
+            --panel: #1e1e1e; 
+            --text: #ffffff; 
+            --muted: #888888; 
+            --p1: #FF4D4D; 
+            --p2: #FF9F43; 
+            --p3: #F1C40F; 
+            --p4: #2ECC71; 
+            --rem: #2c2c2c;
+            --border: #444444;
+            --shadow: 0 12px 36px rgba(0,0,0,0.6);
+            --chart-line: #3498db;
+            --chart-ideal: #777777;
+            --input-bg: #2a2a2a;
+        }
 
+        /* Thème Camouflage (Blanc & Gris) */
+        body.light-theme {
+            --bg: #ffffff;
+            --panel: #ffffff;
+            --text: #5a5a5a;
+            --muted: #aaaaaa;
+            --p1: #555555; 
+            --p2: #808080; 
+            --p3: #b0b0b0; 
+            --p4: #dadada; 
+            --rem: #f5f5f5; 
+            --border: #e5e5e5;
+            --shadow: none; 
+            --chart-line: #666666;
+            --chart-ideal: #cccccc;
+            --input-bg: #f9f9f5;
+        }
+
+        /* Protection globale contre les débordements */
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body { 
+            font-family: 'Segoe UI', -apple-system, sans-serif; 
+            background: var(--bg); 
+            color: var(--text); 
+            display: flex; 
+            justify-content: center; 
+            align-items: center; 
+            height: 100vh; 
+            width: 100vw;
+            overflow: hidden; 
+            padding: 10px;
+            transition: background 0.3s;
+        }
+        
+        /* Conteneur Verrouillé */
+        .app-container { 
+            width: 100%; 
+            max-width: 360px; 
+            height: 100%; 
+            max-height: 630px;
+            background: var(--panel); 
+            border-radius: 16px; 
+            padding: 16px; 
+            display: flex; 
+            flex-direction: column;
+            justify-content: space-between;
+            box-shadow: var(--shadow);
+            border: 1px solid var(--border);
+            overflow: hidden;
+            position: relative;
+        }
+
+        #mainView, #statsView { 
+            display: flex; 
+            flex-direction: column; 
+            justify-content: space-between; 
+            height: 100%; 
+            width: 100%; 
+            gap: 12px;
+        }
+        #statsView { display: none; }
+
+        /* Timer Section */
+        .timer-row { display: flex; align-items: center; justify-content: space-between; width: 100%; }
+        #timer { font-size: 34px; font-weight: bold; font-variant-numeric: tabular-nums; line-height: 1; }
+        #dayTotal { font-size: 18px; font-weight: bold; }
+        #estimatedEnd { font-size: 10px; color: var(--muted); margin-top: 2px; font-style: italic; }
+        
+        /* Barre d'avancement */
+        .progress-wrapper { height: 6px; background: var(--rem); border-radius: 3px; overflow: hidden; display: flex; width: 100%; margin: 6px 0; }
+        .segment { height: 100%; transition: width 0.3s; }
+        
+        /* Boutons de priorité */
+        .controls-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; width: 100%; }
+        .p-btn { border: 1px solid var(--border); background: transparent; color: var(--text); padding: 6px 0; border-radius: 4px; cursor: pointer; font-size: 10px; transition: all 0.2s; font-weight: bold; }
+        .p-btn.active { color: white; border-color: transparent; }
+        body.light-theme .p-btn.active { color: #333; }
+
+        .theme-input { width: 30px; background: var(--input-bg); border: 1px solid var(--border); color: var(--text); border-radius: 4px; text-align: center; padding: 2px; font-size: 10px; }
+
+        /* TODO List Section */
+        .todo-section { flex: 1; display: flex; flex-direction: column; min-height: 0; border-top: 1px solid var(--border); padding-top: 8px; }
+        .todo-header { display: flex; justify-content: space-between; align-items: center; font-size: 11px; font-weight: bold; margin-bottom: 6px; }
+        
+        /* Conteneur de Saisie Robuste */
+        .todo-input-container { display: flex; flex-direction: column; gap: 6px; margin-bottom: 8px; background: rgba(0,0,0,0.05); padding: 6px; border-radius: 6px; border: 1px solid var(--border); width: 100%; }
+        .todo-input { width: 100%; background: var(--input-bg); border: 1px solid var(--border); color: var(--text); padding: 5px 8px; border-radius: 4px; font-size: 11px; }
+        .todo-list { flex: 1; overflow-y: auto; list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 4px; }
+        
+        /* Liste des tâches épurée */
+        .todo-item { display: flex; align-items: center; justify-content: space-between; background: var(--rem); padding: 6px 8px; border-radius: 6px; border: 1px solid transparent; font-size: 11px; cursor: pointer; transition: background 0.2s; }
+        .todo-item.active-task { border-color: var(--chart-line); }
+        .todo-item.completed span.todo-text { text-decoration: line-through; color: var(--muted); }
+        .todo-item.dragging { opacity: 0.4; border: 1px dashed var(--chart-line); }
+        
+        /* 2/3 de largeur de ligne pour le titre de tâche (65%) */
+        .todo-left { display: flex; align-items: center; gap: 8px; width: 62%; overflow: hidden; }
+        .todo-text { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex-grow: 1; text-align: left; }
+        .todo-text.expanded { white-space: normal; overflow: visible; text-overflow: clip; word-break: break-word; }
+        
+        /* Style d'édition en mode Modifier */
+        .todo-inline-input { background: transparent; border: none; border-bottom: 1px dashed var(--muted); color: var(--text); font-family: inherit; font-size: 11px; width: 85%; }
+        .todo-inline-select { background: var(--rem); border: 1px solid var(--border); color: var(--text); border-radius: 4px; font-size: 9px; padding: 1px; }
+        .todo-inline-num { background: var(--input-bg); border: 1px solid var(--border); color: var(--text); text-align: center; border-radius: 4px; font-size: 10px; padding: 1px; width: 34px; }
+
+        .todo-right { display: flex; align-items: center; gap: 4px; width: 38%; justify-content: flex-end; flex-shrink: 0; }
+
+        /* Boutons d'action miniatures */
+        .icon-btn { background: none; border: none; color: var(--text); cursor: pointer; padding: 0 2px; font-size: 11px; font-weight: bold; transition: color 0.2s; }
+        .icon-btn:hover { color: var(--chart-line); }
+        .icon-btn.delete-btn:hover { color: var(--p1); }
+        
+        /* Grab Handle pour le Drag & Drop */
+        .drag-handle { cursor: grab; color: var(--muted); font-size: 14px; padding-right: 2px; user-select: none; }
+        .drag-handle:active { cursor: grabbing; }
+
+        /* TIME SPINNER DOUBLE H:MIN */
+        .time-picker-row { display: flex; justify-content: space-between; align-items: center; width: 100%; gap: 6px; }
+        .spinner-container { display: flex; align-items: center; gap: 4px; background: var(--input-bg); border: 1px solid var(--border); border-radius: 4px; padding: 2px 4px; }
+        .spinner-block { display: flex; align-items: center; gap: 1px; }
+        .spinner-input { width: 16px; background: transparent; border: none; color: var(--text); font-size: 10px; font-weight: bold; text-align: center; margin: 0; }
+        .spinner-input::-webkit-outer-spin-button, .spinner-input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+        .spinner-arrows { display: flex; flex-direction: column; line-height: 0.4; }
+        .spin-btn { background: none; border: none; color: var(--muted); cursor: pointer; font-size: 6px; padding: 1px; line-height: 1; }
+        .spin-btn:hover { color: var(--chart-line); }
+        .spinner-unit { font-size: 9px; color: var(--muted); font-weight: bold; }
+
+        /* Actions Footer */
+        .actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; width: 100%; }
+        button.action { padding: 10px; border: 1px solid var(--border); border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 12px; color: var(--text); background: var(--panel); }
+        #startStopBtn { background: var(--p4); color: var(--bg); border: none; }
+        
+        /* Interrupteur iOS */
+        .switch-container { display: flex; align-items: center; gap: 4px; }
+        .switch { position: relative; display: inline-block; width: 24px; height: 14px; }
+        .switch input { opacity: 0; width: 0; height: 0; }
         .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #444; transition: .3s; border-radius: 14px; }
         .slider:before { position: absolute; content: ""; height: 10px; width: 11px; left: 2px; bottom: 2px; background-color: white; transition: .3s; border-radius: 50%; }
         input:checked + .slider { background-color: var(--p2); }
