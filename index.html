@@ -1,173 +1,4 @@
-<!DOCTYPE html>
-<html lang="fr">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Focus Meter Pro</title>
-    <!-- Favicon intégré -->
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><circle cx='50' cy='50' r='40' fill='none' stroke='%23ffffff' stroke-width='8'/><line x1='50' y1='50' x2='50' y2='30' stroke='%23ffffff' stroke-width='8'/></svg>">
-    <!-- Chart.js pour les graphiques -->
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <style>
-        /* Variables de Thème (Thème Sombre par défaut) */
-        :root { 
-            --bg: #121212; 
-            --panel: #1e1e1e; 
-            --text: #ffffff; 
-            --muted: #888888; 
-            --p1: #FF4D4D; 
-            --p2: #FF9F43; 
-            --p3: #F1C40F; 
-            --p4: #2ECC71; 
-            --rem: #2c2c2c;
-            --border: #444444;
-            --shadow: 0 12px 36px rgba(0,0,0,0.6);
-            --chart-line: #3498db;
-            --chart-ideal: #777777;
-            --input-bg: #2a2a2a;
-        }
 
-        /* Thème Camouflage (Blanc & Gris) */
-        body.light-theme {
-            --bg: #ffffff;
-            --panel: #ffffff;
-            --text: #5a5a5a;
-            --muted: #aaaaaa;
-            --p1: #555555; 
-            --p2: #808080; 
-            --p3: #b0b0b0; 
-            --p4: #dadada; 
-            --rem: #f5f5f5; 
-            --border: #e5e5e5;
-            --shadow: none; 
-            --chart-line: #666666;
-            --chart-ideal: #cccccc;
-            --input-bg: #f9f9f5;
-        }
-
-        /* Protection globale contre les débordements */
-        * {
-            box-sizing: border-box;
-            margin: 0;
-            padding: 0;
-        }
-
-        body { 
-            font-family: 'Segoe UI', -apple-system, sans-serif; 
-            background: var(--bg); 
-            color: var(--text); 
-            display: flex; 
-            justify-content: center; 
-            align-items: center; 
-            height: 100vh; 
-            width: 100vw;
-            overflow: hidden; 
-            padding: 10px;
-            transition: background 0.3s;
-        }
-        
-        /* Conteneur Verrouillé */
-        .app-container { 
-            width: 100%; 
-            max-width: 360px; 
-            height: 100%; 
-            max-height: 630px;
-            background: var(--panel); 
-            border-radius: 16px; 
-            padding: 16px; 
-            display: flex; 
-            flex-direction: column;
-            justify-content: space-between;
-            box-shadow: var(--shadow);
-            border: 1px solid var(--border);
-            overflow: hidden;
-            position: relative;
-        }
-
-        #mainView, #statsView { 
-            display: flex; 
-            flex-direction: column; 
-            justify-content: space-between; 
-            height: 100%; 
-            width: 100%; 
-            gap: 12px;
-        }
-        #statsView { display: none; }
-
-        /* Timer Section */
-        .timer-row { display: flex; align-items: center; justify-content: space-between; width: 100%; }
-        #timer { font-size: 34px; font-weight: bold; font-variant-numeric: tabular-nums; line-height: 1; }
-        #dayTotal { font-size: 18px; font-weight: bold; }
-        #estimatedEnd { font-size: 10px; color: var(--muted); margin-top: 2px; font-style: italic; }
-        
-        /* Barre d'avancement */
-        .progress-wrapper { height: 6px; background: var(--rem); border-radius: 3px; overflow: hidden; display: flex; width: 100%; margin: 6px 0; }
-        .segment { height: 100%; transition: width 0.3s; }
-        
-        /* Boutons de priorité */
-        .controls-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; width: 100%; }
-        .p-btn { border: 1px solid var(--border); background: transparent; color: var(--text); padding: 6px 0; border-radius: 4px; cursor: pointer; font-size: 10px; transition: all 0.2s; font-weight: bold; }
-        .p-btn.active { color: white; border-color: transparent; }
-        body.light-theme .p-btn.active { color: #333; }
-
-        .theme-input { width: 30px; background: var(--input-bg); border: 1px solid var(--border); color: var(--text); border-radius: 4px; text-align: center; padding: 2px; font-size: 10px; }
-
-        /* TODO List Section */
-        .todo-section { flex: 1; display: flex; flex-direction: column; min-height: 0; border-top: 1px solid var(--border); padding-top: 8px; }
-        .todo-header { display: flex; justify-content: space-between; align-items: center; font-size: 11px; font-weight: bold; margin-bottom: 6px; }
-        
-        /* Conteneur de Saisie Robuste */
-        .todo-input-container { display: flex; flex-direction: column; gap: 6px; margin-bottom: 8px; background: rgba(0,0,0,0.05); padding: 6px; border-radius: 6px; border: 1px solid var(--border); width: 100%; }
-        .todo-input { width: 100%; background: var(--input-bg); border: 1px solid var(--border); color: var(--text); padding: 5px 8px; border-radius: 4px; font-size: 11px; }
-        .todo-list { flex: 1; overflow-y: auto; list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 4px; }
-        
-        /* Liste des tâches épurée */
-        .todo-item { display: flex; align-items: center; justify-content: space-between; background: var(--rem); padding: 6px 8px; border-radius: 6px; border: 1px solid transparent; font-size: 11px; cursor: pointer; transition: background 0.2s; }
-        .todo-item.active-task { border-color: var(--chart-line); }
-        .todo-item.completed span.todo-text { text-decoration: line-through; color: var(--muted); }
-        .todo-item.dragging { opacity: 0.4; border: 1px dashed var(--chart-line); }
-        
-        /* 2/3 de largeur de ligne pour le titre de tâche (65%) */
-        .todo-left { display: flex; align-items: center; gap: 8px; width: 62%; overflow: hidden; }
-        .todo-text { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex-grow: 1; text-align: left; }
-        .todo-text.expanded { white-space: normal; overflow: visible; text-overflow: clip; word-break: break-word; }
-        
-        /* Style d'édition en mode Modifier */
-        .todo-inline-input { background: transparent; border: none; border-bottom: 1px dashed var(--muted); color: var(--text); font-family: inherit; font-size: 11px; width: 85%; }
-        .todo-inline-select { background: var(--rem); border: 1px solid var(--border); color: var(--text); border-radius: 4px; font-size: 9px; padding: 1px; }
-        .todo-inline-num { background: var(--input-bg); border: 1px solid var(--border); color: var(--text); text-align: center; border-radius: 4px; font-size: 10px; padding: 1px; width: 34px; }
-
-        .todo-right { display: flex; align-items: center; gap: 4px; width: 38%; justify-content: flex-end; flex-shrink: 0; }
-
-        /* Boutons d'action miniatures */
-        .icon-btn { background: none; border: none; color: var(--text); cursor: pointer; padding: 0 2px; font-size: 11px; font-weight: bold; transition: color 0.2s; }
-        .icon-btn:hover { color: var(--chart-line); }
-        .icon-btn.delete-btn:hover { color: var(--p1); }
-        
-        /* Grab Handle pour le Drag & Drop */
-        .drag-handle { cursor: grab; color: var(--muted); font-size: 14px; padding-right: 2px; user-select: none; }
-        .drag-handle:active { cursor: grabbing; }
-
-        /* TIME SPINNER DOUBLE H:MIN */
-        .time-picker-row { display: flex; justify-content: space-between; align-items: center; width: 100%; gap: 6px; }
-        .spinner-container { display: flex; align-items: center; gap: 4px; background: var(--input-bg); border: 1px solid var(--border); border-radius: 4px; padding: 2px 4px; }
-        .spinner-block { display: flex; align-items: center; gap: 1px; }
-        .spinner-input { width: 16px; background: transparent; border: none; color: var(--text); font-size: 10px; font-weight: bold; text-align: center; margin: 0; }
-        .spinner-input::-webkit-outer-spin-button, .spinner-input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
-        .spinner-arrows { display: flex; flex-direction: column; line-height: 0.4; }
-        .spin-btn { background: none; border: none; color: var(--muted); cursor: pointer; font-size: 6px; padding: 1px; line-height: 1; }
-        .spin-btn:hover { color: var(--chart-line); }
-        .spinner-unit { font-size: 9px; color: var(--muted); font-weight: bold; }
-
-        /* Actions Footer */
-        .actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; width: 100%; }
-        button.action { padding: 10px; border: 1px solid var(--border); border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 12px; color: var(--text); background: var(--panel); }
-        #startStopBtn { background: var(--p4); color: var(--bg); border: none; }
-        
-        /* Interrupteur iOS */
-        .switch-container { display: flex; align-items: center; gap: 4px; }
-        .switch { position: relative; display: inline-block; width: 24px; height: 14px; }
-        .switch input { opacity: 0; width: 0; height: 0; }
         .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #444; transition: .3s; border-radius: 14px; }
         .slider:before { position: absolute; content: ""; height: 10px; width: 11px; left: 2px; bottom: 2px; background-color: white; transition: .3s; border-radius: 50%; }
         input:checked + .slider { background-color: var(--p2); }
@@ -202,6 +33,14 @@
         @keyframes pulse-waste {
             0% { box-shadow: 0 0 2px rgba(255,77,77,0.2); }
             100% { box-shadow: 0 0 8px rgba(255,77,77,0.4); }
+        }
+        .todo-item.postponed-task {
+            opacity: 0.5;
+            border: 1px dotted var(--muted) !important;
+            background: rgba(0, 0, 0, 0.05);
+        }
+        body.light-theme .todo-item.postponed-task {
+            background: rgba(0, 0, 0, 0.02);
         }
         .waste-banner {
             font-size: 8px;
@@ -249,6 +88,17 @@
         .discrete-footer:hover {
             opacity: 0.8;
         }
+        .todo-inline-num-mini {
+            background: var(--input-bg);
+            border: 1px solid var(--border);
+            color: var(--text);
+            text-align: center;
+            border-radius: 4px;
+            font-size: 9px;
+            padding: 1px;
+            width: 24px;
+            height: 16px;
+        }
     </style>
 </head>
 <body>
@@ -295,9 +145,12 @@
         <!-- TO-DO LIST -->
         <div class="todo-section">
             <div class="todo-header" style="font-size:10px;">
-                <div style="display:flex; gap: 6px; align-items:center;">
-                    <span style="font-weight:bold; font-size:11px;">Ma To-Do</span>
-                    <span id="toggleCompletedBtn" onclick="toggleCompletedVisibility()" style="cursor:pointer; text-decoration:underline; color:var(--muted);">Afficher terminées</span>
+                <div style="display:flex; gap: 4px; align-items:center; flex-wrap: wrap;">
+                    <span style="font-weight:bold; font-size:11px; margin-right: 2px;">Ma To-Do</span>
+                    <span id="toggleCompletedBtn" onclick="toggleCompletedVisibility()" style="cursor:pointer; text-decoration:underline; color:var(--muted);">Terminées</span>
+                    <span style="color:var(--border);">|</span>
+                    <span id="togglePostponedBtn" onclick="togglePostponedVisibility()" style="cursor:pointer; text-decoration:underline; color:var(--muted);">Reportées</span>
+                    <span style="color:var(--border);">|</span>
                     <span id="toggleEditBtn" onclick="toggleEditMode()" style="cursor:pointer; text-decoration:underline; color:var(--muted); font-weight: bold;">Modifier</span>
                 </div>
                 <!-- Warning "Charge" déplacé élégamment à gauche de "Est: 0h" -->
@@ -401,8 +254,27 @@
                 <button id="task-tab-postponed" class="nav-btn" onclick="changeTaskView('postponed')">Reportées</button>
             </div>
             
-            <div class="stats-scroll" id="tasksScrollContainer" style="display: flex; flex-direction: column; gap: 8px;">
-                <!-- Les graphiques ou listes seront injectés ici de manière dynamique -->
+            <!-- SOUS-SECTION : GRAPHIQUES -->
+            <div id="tasksStatsSubSection" class="stats-scroll" style="display: flex; flex-direction: column; gap: 8px;">
+                <div id="tasksMetricsGrid" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px; margin-bottom: 4px;">
+                    <!-- Les métriques seront injectées ici -->
+                </div>
+                <div class="canvas-wrapper" style="height: 120px; margin-bottom: 6px; flex-shrink: 0;">
+                    <canvas id="taskDistributionChart"></canvas>
+                </div>
+                <div class="canvas-wrapper" style="height: 120px; flex-shrink: 0;">
+                    <canvas id="taskTimeChart"></canvas>
+                </div>
+            </div>
+
+            <!-- SOUS-SECTION : HISTORIQUE -->
+            <div id="tasksHistorySubSection" class="stats-scroll" style="display: none; flex-direction: column; gap: 6px; overflow-y: auto;">
+                <!-- La liste d'historique sera injectée ici -->
+            </div>
+
+            <!-- SOUS-SECTION : REPORTÉES -->
+            <div id="tasksPostponedSubSection" class="stats-scroll" style="display: none; flex-direction: column; gap: 6px; overflow-y: auto;">
+                <!-- La liste des tâches reportées sera injectée ici -->
             </div>
         </div>
     </div>
@@ -588,16 +460,18 @@
         todos.forEach(t => {
             if (!t) return;
             
-            // Masquer les tâches reportées au lendemain (sauf si terminées ou si la date de report est passée/aujourd'hui)
-            if (!t.completed && t.postponedUntil && t.postponedUntil > todayStr) {
+            const isPostponed = !t.completed && t.postponedUntil && t.postponedUntil > todayStr;
+            
+            // Masquer les tâches reportées au lendemain (sauf si on a coché "Afficher reportées")
+            if (isPostponed && !showPostponedTodos) {
                 return;
             }
 
-            if (!t.completed) estSum += t.estimate;
+            if (!t.completed && !isPostponed) estSum += t.estimate;
             if (t.completed && !showCompletedTodos) return;
 
             const li = document.createElement('li');
-            li.className = `todo-item ${t.completed ? 'completed' : ''} ${t.id == activeTodoId ? 'active-task' : ''}`;
+            li.className = `todo-item ${t.completed ? 'completed' : ''} ${t.id == activeTodoId ? 'active-task' : ''} ${(!t.completed && t.postponedUntil && t.postponedUntil > todayStr) ? 'postponed-task' : ''}`;
             li.dataset.id = t.id;
 
             // DRAG & DROP HTML5
@@ -646,13 +520,11 @@
             let rightBlock = '';
 
             if (editModeActive) {
-                // MODIFICATION 100% INLINE SANS BOITE DE DIALOGUE (✏️ a disparu)
                 leftBlock = `
                     <span class="drag-handle">⋮</span>
-                    <input type="text" class="todo-inline-input" value="${t.text}" onchange="updateTodoTextInline('${t.id}', this.value)">
+                    <input type="text" class="todo-inline-input" value="${t.text}" onchange="updateTodoTextInline('${t.id}', this.value)" style="width: 78%;">
                 `;
                 rightBlock = `
-                    <!-- Menu déroulant discret de priorité -->
                     <select class="todo-inline-select" onchange="updateTodoPriorityInline('${t.id}', this.value)">
                         <option value="1" ${t.priority === 1 ? 'selected' : ''}>P1</option>
                         <option value="2" ${t.priority === 2 ? 'selected' : ''}>P2</option>
@@ -660,19 +532,25 @@
                         <option value="4" ${t.priority === 4 ? 'selected' : ''}>P4</option>
                     </select>
                     
-                    <!-- Saisie en ligne du temps réalisé (Chrono) en minutes -->
-                    <span style="font-size:10px; color:var(--muted); display:flex; align-items:center; gap:1px;">
-                        ⏱️<input type="number" class="todo-inline-num" value="${Math.round(displaySec/60)}" onchange="updateTodoWorkedInline('${t.id}', this.value)">m
+                    <span style="font-size:9px; color:var(--muted); display:flex; align-items:center; gap:0.5px;" title="Réalisé (m)">
+                        ⏱️<input type="number" class="todo-inline-num-mini" value="${Math.round(displaySec/60)}" onchange="updateTodoWorkedInline('${t.id}', this.value)">
                     </span>
                     
-                    <!-- Saisie en ligne du temps estimé en heures -->
-                    <input type="number" class="todo-inline-num" value="${t.estimate.toFixed(2)}" step="0.25" min="0.25" onchange="updateTodoEstimateInline('${t.id}', this.value)">h
+                    <span style="font-size:9px; color:var(--muted); display:flex; align-items:center; gap:0.5px;" title="Estimé (h)">
+                        ✏️<input type="number" class="todo-inline-num-mini" value="${t.estimate.toFixed(2)}" step="0.25" min="0.25" onchange="updateTodoEstimateInline('${t.id}', this.value)" style="width:28px;">
+                    </span>
+                    
+                    <span style="font-size:9px; color:var(--muted); display:flex; align-items:center; gap:0.5px;" title="Reports">
+                        🔄<input type="number" class="todo-inline-num-mini" value="${t.postponeCount}" min="0" onchange="updateTodoPostponeCountInline('${t.id}', this.value)">
+                    </span>
                     
                     <button class="icon-btn delete-btn" onclick="event.stopPropagation(); deleteTodo('${t.id}')">✕</button>
                 `;
             } else {
                 let wasteIndicator = '';
                 let wasteActionsHtml = '';
+                const isPostponed = !t.completed && t.postponedUntil && t.postponedUntil > todayStr;
+                
                 if (t.postponeCount >= 3) {
                     li.classList.add('mental-waste');
                     wasteIndicator = `<div class="waste-banner">🗑️ DÉCHET MENTAL (Reporté ${t.postponeCount}x) : À agir d'urgence !</div>`;
@@ -689,7 +567,7 @@
                     <input type="checkbox" ${t.completed ? 'checked' : ''} onclick="event.stopPropagation(); toggleTodoDone('${t.id}')">
                     <div style="display: flex; flex-direction: column; flex-grow: 1; overflow: hidden; text-align: left;">
                         <span class="todo-text" onclick="toggleExpandText(this, event)" style="${t.postponeCount >= 3 ? 'color:#ff4d4d; font-weight:bold;' : ''}">
-                            ${t.postponeCount >= 3 ? '⚠️ ' : ''}${t.text}
+                            ${t.postponeCount >= 3 ? '⚠️ ' : ''}${isPostponed ? '🔄 [Reportée] ' : ''}${t.text}
                         </span>
                         ${wasteIndicator}
                         ${wasteActionsHtml}
@@ -1322,11 +1200,15 @@
     document.getElementById('themeToggle').checked = isLight;
     toggleTheme(isLight);
 
+    // Initialisation texte bouton
+    document.getElementById('togglePostponedBtn').textContent = showPostponedTodos ? "Masquer reportées" : "Reportées";
+
 
     // --- NOUVELLES FONCTIONS DE GESTION DE TÂCHES HISTORIQUES & REPORTS ---
     let currentTaskView = 'stats';
     let taskChart = null;
     let taskTimeChart = null;
+    let showPostponedTodos = localStorage.getItem('focusShowPostponedTodos') === 'true';
 
     function getTomorrowDateStr() {
         const d = new Date();
@@ -1337,6 +1219,7 @@
     function exportData() {
         const data = {
             focusShowCompletedTodos: localStorage.getItem('focusShowCompletedTodos'),
+            focusShowPostponedTodos: localStorage.getItem('focusShowPostponedTodos'),
             focusSessions: localStorage.getItem('focusSessions'),
             focusDailyGoal: localStorage.getItem('focusDailyGoal'),
             focusStartHour: localStorage.getItem('focusStartHour'),
@@ -1387,6 +1270,22 @@
         input.click();
     }
 
+    function togglePostponedVisibility() {
+        showPostponedTodos = !showPostponedTodos;
+        localStorage.setItem('focusShowPostponedTodos', showPostponedTodos);
+        document.getElementById('togglePostponedBtn').textContent = showPostponedTodos ? "Masquer reportées" : "Reportées";
+        renderTodos();
+    }
+
+    function updateTodoPostponeCountInline(id, val) {
+        const t = todos.find(todo => todo.id === id);
+        if (t) {
+            t.postponeCount = parseInt(val) || 0;
+            localStorage.setItem('focusTodos', JSON.stringify(todos));
+            renderTodos();
+        }
+    }
+
     function postponeTodo(id) {
         const t = todos.find(todo => todo.id === id);
         if (!t) return;
@@ -1404,7 +1303,7 @@
         }
         
         renderTodos();
-        if (document.getElementById('statsView').style.display === 'flex' && document.getElementById('tasksAnalysisSection').style.display === 'flex') {
+        if (document.getElementById('statsView').style.display === 'flex') {
             renderTaskView();
         }
     }
@@ -1519,13 +1418,21 @@
     }
 
     function renderTaskView() {
-        const container = document.getElementById('tasksScrollContainer');
-        container.innerHTML = '';
+        const statsSec = document.getElementById('tasksStatsSubSection');
+        const historySec = document.getElementById('tasksHistorySubSection');
+        const postponedSec = document.getElementById('tasksPostponedSubSection');
+        
+        // Cacher toutes les sous-sections
+        statsSec.style.display = 'none';
+        historySec.style.display = 'none';
+        postponedSec.style.display = 'none';
         
         if (taskChart) { taskChart.destroy(); taskChart = null; }
         if (taskTimeChart) { taskTimeChart.destroy(); taskTimeChart = null; }
         
         if (currentTaskView === 'stats') {
+            statsSec.style.display = 'flex';
+            
             const total = todos.length;
             const completed = todos.filter(t => t.completed).length;
             const active = todos.filter(t => !t.completed && (!t.postponedUntil || t.postponedUntil <= getLocalYYYYMMDD())).length;
@@ -1536,38 +1443,26 @@
             const mentalWasteCount = todos.filter(t => !t.completed && (t.postponeCount || 0) >= 3).length;
             
             const metricsHtml = `
-                <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px; margin-bottom: 6px;">
-                    <div style="background: var(--rem); border: 1px solid var(--border); padding: 6px; border-radius: 6px; text-align: center;">
-                        <div style="font-size: 8px; color: var(--muted); text-transform: uppercase;">Réalisées</div>
-                        <div style="font-size: 13px; font-weight: bold; color: var(--p4);">${completed} / ${total}</div>
-                    </div>
-                    <div style="background: var(--rem); border: 1px solid var(--border); padding: 6px; border-radius: 6px; text-align: center;">
-                        <div style="font-size: 8px; color: var(--muted); text-transform: uppercase;">Temps Tâches</div>
-                        <div style="font-size: 13px; font-weight: bold; color: var(--chart-line);">${totalWorkedHrs}h</div>
-                    </div>
-                    <div style="background: var(--rem); border: 1px solid var(--border); padding: 6px; border-radius: 6px; text-align: center;">
-                        <div style="font-size: 8px; color: var(--muted); text-transform: uppercase;">Actives / Reportées</div>
-                        <div style="font-size: 13px; font-weight: bold; color: var(--p2);">${active} / ${postponed}</div>
-                    </div>
-                    <div style="background: var(--rem); border: 1px solid var(--border); padding: 6px; border-radius: 6px; text-align: center;">
-                        <div style="font-size: 8px; color: var(--muted); text-transform: uppercase;">Déchets mentaux 🗑️</div>
-                        <div style="font-size: 13px; font-weight: bold; color: var(--p1);">${mentalWasteCount}</div>
-                    </div>
+                <div style="background: var(--rem); border: 1px solid var(--border); padding: 4px; border-radius: 6px; text-align: center;">
+                    <div style="font-size: 8px; color: var(--muted); text-transform: uppercase;">Réalisées</div>
+                    <div style="font-size: 12px; font-weight: bold; color: var(--p4);">${completed} / ${total}</div>
+                </div>
+                <div style="background: var(--rem); border: 1px solid var(--border); padding: 4px; border-radius: 6px; text-align: center;">
+                    <div style="font-size: 8px; color: var(--muted); text-transform: uppercase;">Temps Tâches</div>
+                    <div style="font-size: 12px; font-weight: bold; color: var(--chart-line);">${totalWorkedHrs}h</div>
+                </div>
+                <div style="background: var(--rem); border: 1px solid var(--border); padding: 4px; border-radius: 6px; text-align: center;">
+                    <div style="font-size: 8px; color: var(--muted); text-transform: uppercase;">Actives / Reportées</div>
+                    <div style="font-size: 12px; font-weight: bold; color: var(--p2);">${active} / ${postponed}</div>
+                </div>
+                <div style="background: var(--rem); border: 1px solid var(--border); padding: 4px; border-radius: 6px; text-align: center;">
+                    <div style="font-size: 8px; color: var(--muted); text-transform: uppercase;">Déchets mentaux</div>
+                    <div style="font-size: 12px; font-weight: bold; color: var(--p1);">${mentalWasteCount}</div>
                 </div>
             `;
+            document.getElementById('tasksMetricsGrid').innerHTML = metricsHtml;
             
-            const canvasHtml = `
-                <div class="canvas-wrapper" style="height: 120px; margin-bottom: 6px;">
-                    <canvas id="taskDistributionChart"></canvas>
-                </div>
-                <div class="canvas-wrapper" style="height: 120px;">
-                    <canvas id="taskTimeChart"></canvas>
-                </div>
-            `;
-            
-            container.innerHTML = metricsHtml + canvasHtml;
-            
-            // Graphique 1 : Nombre de tâches par priorité
+            // Graphique 1 : Volume de tâches par priorité
             const pCounts = [1, 2, 3, 4].map(p => todos.filter(t => t.priority === p).length);
             const ctx1 = document.getElementById('taskDistributionChart').getContext('2d');
             
@@ -1649,13 +1544,14 @@
             });
             
         } else if (currentTaskView === 'history') {
+            historySec.style.display = 'flex';
             const completedTodos = todos.filter(t => t.completed);
             if (completedTodos.length === 0) {
-                container.innerHTML = `<div style="text-align: center; color: var(--muted); font-size: 10px; padding: 20px;">Aucune tâche terminée dans l'historique.</div>`;
+                historySec.innerHTML = `<div style="text-align: center; color: var(--muted); font-size: 10px; padding: 20px;">Aucune tâche terminée dans l'historique.</div>`;
                 return;
             }
             
-            let html = '<div style="display:flex; flex-direction:column; gap:4px; max-height:280px; overflow-y:auto; padding-right:2px;">';
+            let html = '<div style="display:flex; flex-direction:column; gap:4px; width:100%;">';
             completedTodos.forEach(t => {
                 html += `
                     <div style="display:flex; justify-content:space-between; align-items:center; background:var(--rem); padding:6px 8px; border-radius:6px; border:1px solid var(--border); font-size:10px;">
@@ -1671,16 +1567,17 @@
                 `;
             });
             html += '</div>';
-            container.innerHTML = html;
+            historySec.innerHTML = html;
             
         } else if (currentTaskView === 'postponed') {
+            postponedSec.style.display = 'flex';
             const postponedTodos = todos.filter(t => !t.completed && (t.postponeCount > 0 || (t.postponedUntil && t.postponedUntil > getLocalYYYYMMDD())));
             if (postponedTodos.length === 0) {
-                container.innerHTML = `<div style="text-align: center; color: var(--muted); font-size: 10px; padding: 20px;">Aucune tâche reportée.</div>`;
+                postponedSec.innerHTML = `<div style="text-align: center; color: var(--muted); font-size: 10px; padding: 20px;">Aucune tâche reportée.</div>`;
                 return;
             }
             
-            let html = '<div style="display:flex; flex-direction:column; gap:4px; max-height:280px; overflow-y:auto; padding-right:2px;">';
+            let html = '<div style="display:flex; flex-direction:column; gap:4px; width:100%;">';
             postponedTodos.forEach(t => {
                 const isWaste = t.postponeCount >= 3;
                 const cardBg = isWaste ? 'linear-gradient(135deg, #2c1a1a 0%, #1e1e1e 100%)' : 'var(--rem)';
@@ -1708,13 +1605,14 @@
                 `;
             });
             html += '</div>';
-            container.innerHTML = html;
+            postponedSec.innerHTML = html;
         }
     }
 
-    // Attachment de nos nouvelles fonctions à window pour qu'elles soient appelées depuis le HTML
     window.exportData = exportData;
     window.importData = importData;
+    window.togglePostponedVisibility = togglePostponedVisibility;
+    window.updateTodoPostponeCountInline = updateTodoPostponeCountInline;
     window.postponeTodo = postponeTodo;
     window.splitTodo = splitTodo;
     window.delegateTodo = delegateTodo;
