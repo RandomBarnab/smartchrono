@@ -4,6 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Focus Meter Pro</title>
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Focus Pro">
     <!-- Favicon intégré -->
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><circle cx='50' cy='50' r='40' fill='none' stroke='%23ffffff' stroke-width='8'/><line x1='50' y1='50' x2='50' y2='30' stroke='%23ffffff' stroke-width='8'/></svg>">
     <!-- Chart.js pour les graphiques -->
@@ -188,7 +191,25 @@
         .day-num { font-size: 8px; font-weight: bold; color: var(--text); }
         .mini-pie { width: 12px; height: 12px; border-radius: 50%; background: var(--border); }
 
-        /* Style pour les tâches reportées et déchet mental */
+        /* Style pour les reports progressifs (jaune clair, jaune orange, rouge) */
+        .todo-item.postpone-1 {
+            background: #fff9db !important; /* jaune clair */
+            border: 1px solid #fcc419 !important;
+        }
+        body:not(.light-theme) .todo-item.postpone-1 {
+            background: linear-gradient(135deg, #2b2512 0%, #1e1e1e 100%) !important;
+            border: 1px solid #fcc419 !important;
+        }
+        
+        .todo-item.postpone-2 {
+            background: #ffe8cc !important; /* jaune orange */
+            border: 1px solid #f76707 !important;
+        }
+        body:not(.light-theme) .todo-item.postpone-2 {
+            background: linear-gradient(135deg, #352210 0%, #1e1e1e 100%) !important;
+            border: 1px solid #f76707 !important;
+        }
+
         .todo-item.mental-waste {
             background: linear-gradient(135deg, #2c1a1a 0%, #1e1e1e 100%) !important;
             border: 1px solid #ff4d4d !important;
@@ -203,6 +224,7 @@
             0% { box-shadow: 0 0 2px rgba(255,77,77,0.2); }
             100% { box-shadow: 0 0 8px rgba(255,77,77,0.4); }
         }
+        
         .todo-item.postponed-task {
             opacity: 0.5;
             border: 1px dotted var(--muted) !important;
@@ -641,7 +663,13 @@
             if (t.completed && !showCompletedTodos) return;
 
             const li = document.createElement('li');
-            li.className = `todo-item ${t.completed ? 'completed' : ''} ${t.id == activeTodoId ? 'active-task' : ''} ${(!t.completed && t.postponedUntil && t.postponedUntil > todayStr) ? 'postponed-task' : ''}`;
+                        let postponeClass = '';
+            if (!t.completed) {
+                if (t.postponeCount === 1) postponeClass = 'postpone-1';
+                else if (t.postponeCount === 2) postponeClass = 'postpone-2';
+                else if (t.postponeCount >= 3) postponeClass = 'mental-waste';
+            }
+            li.className = `todo-item ${t.completed ? 'completed' : ''} ${t.id == activeTodoId ? 'active-task' : ''} ${(!t.completed && t.postponedUntil && t.postponedUntil > todayStr) ? 'postponed-task' : ''} ${postponeClass}`;
             li.dataset.id = t.id;
 
             // DRAG & DROP HTML5
@@ -722,7 +750,6 @@
                 const isPostponed = !t.completed && t.postponedUntil && t.postponedUntil > todayStr;
                 
                 if (t.postponeCount >= 3) {
-                    li.classList.add('mental-waste');
                     wasteIndicator = `<div class="waste-banner">🗑️ DÉCHET MENTAL (Reporté ${t.postponeCount}x) : À agir d'urgence !</div>`;
                     wasteActionsHtml = `
                         <div class="waste-actions" onclick="event.stopPropagation();">
@@ -1351,10 +1378,10 @@
     window.validateSpinnerInput = validateSpinnerInput;
     window.toggleExpandText = toggleExpandText;
     window.toggleEditMode = toggleEditMode;
-    window.editTodoText = editTodoText;
-    window.editTodoPriority = editTodoPriority;
-    window.editTodoWorked = editTodoWorked;
-    window.editTodoEstimate = editTodoEstimate;
+    window.editTodoText = updateTodoTextInline;
+    window.editTodoPriority = updateTodoPriorityInline;
+    window.editTodoWorked = updateTodoWorkedInline;
+    window.editTodoEstimate = updateTodoEstimateInline;
     window.handleTodoKeyPress = handleTodoKeyPress;
 
     // Initialisation
@@ -1371,7 +1398,7 @@
     toggleTheme(isLight);
 
     // Initialisation texte bouton
-    document.getElementById('togglePostponedBtn').textContent = showPostponedTodos ? "Masquer reportées" : "Reportées";
+    document.getElementById('togglePostponedBtn').textContent = showPostponedTodos ? "Masquer" : "Reportées";
 
 
     // --- NOUVELLES FONCTIONS DE GESTION DE TÂCHES HISTORIQUES & REPORTS ---
@@ -1452,6 +1479,9 @@
             t.postponeCount = parseInt(val) || 0;
             localStorage.setItem('focusTodos', JSON.stringify(todos));
             renderTodos();
+            if (document.getElementById('statsView').style.display === 'flex') {
+                renderTaskView();
+            }
         }
     }
 
