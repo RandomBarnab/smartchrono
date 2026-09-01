@@ -127,7 +127,7 @@
         
         /* Liste des tâches épurée */
         .todo-item { display: flex; align-items: center; justify-content: space-between; background: var(--rem); padding: 6px 8px; border-radius: 6px; border: 1px solid transparent; font-size: 11px; cursor: pointer; transition: background 0.2s; }
-        .todo-item.active-task { border-color: var(--chart-line); }
+        .todo-item.active-task { border: 2px solid var(--chart-line) !important; box-shadow: 0 0 6px rgba(52, 152, 219, 0.4); }
         .todo-item.completed span.todo-text { text-decoration: line-through; color: var(--muted); }
         .todo-item.dragging { opacity: 0.4; border: 1px dashed var(--chart-line); }
         
@@ -451,11 +451,14 @@
                 <div id="tasksMetricsGrid" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px; margin-bottom: 4px;">
                     <!-- Les métriques seront injectées ici -->
                 </div>
-                <div class="canvas-wrapper" style="height: 120px; margin-bottom: 6px; flex-shrink: 0;">
+                <div class="canvas-wrapper" style="height: 110px; margin-bottom: 4px; flex-shrink: 0;">
                     <canvas id="taskDistributionChart"></canvas>
                 </div>
-                <div class="canvas-wrapper" style="height: 120px; flex-shrink: 0;">
+                <div class="canvas-wrapper" style="height: 110px; margin-bottom: 4px; flex-shrink: 0;">
                     <canvas id="taskTimeChart"></canvas>
+                </div>
+                <div class="canvas-wrapper" style="height: 110px; flex-shrink: 0;">
+                    <canvas id="taskAccuracyChart"></canvas>
                 </div>
             </div>
 
@@ -484,6 +487,7 @@
     let isStartHourManuallySet = false;
     let showCompletedTodos = localStorage.getItem('focusShowCompletedTodos') === 'true';
     let showPostponedTodos = localStorage.getItem('focusShowPostponedTodos') === 'true';
+    let expandedTodoIds = new Set();
     let editModeActive = false;
     
     // --- BOUCLIER DE SÉCURITÉ LOCALSTORAGE (Anti-crash absolu) ---
@@ -516,7 +520,8 @@
             worked: parseFloat(t.worked) || 0,
             completed: !!t.completed,
             postponeCount: parseInt(t.postponeCount) || 0,
-            postponedUntil: t.postponedUntil || null
+            postponedUntil: t.postponedUntil || null,
+            completedDate: t.completedDate || null
         };
     }).filter(Boolean);
 
@@ -764,7 +769,7 @@
                 leftBlock = `
                     <input type="checkbox" ${t.completed ? 'checked' : ''} onclick="event.stopPropagation(); toggleTodoDone('${t.id}')">
                     <div style="display: flex; flex-direction: column; flex-grow: 1; overflow: hidden; text-align: left;">
-                        <span class="todo-text" onclick="toggleExpandText(this, event)" style="${t.postponeCount >= 3 ? 'color:#ff4d4d; font-weight:bold;' : ''}">
+                        <span class="todo-text ${expandedTodoIds.has(t.id) ? 'expanded' : ''}" onclick="toggleExpandText('${t.id}', this, event)" style="${t.postponeCount >= 3 ? 'color:#ff4d4d; font-weight:bold;' : ''}">
                             ${t.postponeCount >= 3 ? '⚠️ ' : ''}${isPostponed ? '🔄 [Reportée] ' : ''}${t.text}
                         </span>
                         ${wasteIndicator}
@@ -802,9 +807,15 @@
         }
     }
 
-    function toggleExpandText(element, event) {
+    function toggleExpandText(id, element, event) {
         event.stopPropagation();
-        element.classList.toggle('expanded');
+        if (expandedTodoIds.has(id)) {
+            expandedTodoIds.delete(id);
+            element.classList.remove('expanded');
+        } else {
+            expandedTodoIds.add(id);
+            element.classList.add('expanded');
+        }
     }
 
     function toggleCompletedVisibility() {
@@ -886,10 +897,18 @@
         const t = todos.find(t => t.id === id);
         if (t) {
             t.completed = !t.completed;
+            if (t.completed) {
+                t.completedDate = getLocalYYYYMMDD();
+            } else {
+                t.completedDate = null;
+            }
             if (t.completed && activeTodoId === id) activeTodoId = null;
             localStorage.setItem('focusTodos', JSON.stringify(todos));
             localStorage.setItem('focusActiveTodoId', activeTodoId);
             renderTodos();
+            if (document.getElementById('statsView').style.display === 'flex') {
+                renderTaskView();
+            }
         }
     }
 
@@ -1406,6 +1425,7 @@
     let currentTaskView = 'stats';
     let taskChart = null;
     let taskTimeChart = null;
+    let taskAccuracyChart = null;
 
     function getTomorrowDateStr() {
         const d = new Date();
@@ -1629,35 +1649,45 @@
         
         if (taskChart) { taskChart.destroy(); taskChart = null; }
         if (taskTimeChart) { taskTimeChart.destroy(); taskTimeChart = null; }
+        if (taskAccuracyChart) { taskAccuracyChart.destroy(); taskAccuracyChart = null; }
         
         if (currentTaskView === 'stats') {
             statsSec.style.display = 'flex';
             
             const total = todos.length;
             const completed = todos.filter(t => t.completed).length;
-            const active = todos.filter(t => !t.completed && (!t.postponedUntil || t.postponedUntil <= getLocalYYYYMMDD())).length;
-            const postponed = todos.filter(t => !t.completed && t.postponedUntil && t.postponedUntil > getLocalYYYYMMDD()).length;
             
             const totalWorkedSec = todos.reduce((acc, t) => acc + (parseFloat(t.worked) || 0), 0);
             const totalWorkedHrs = (totalWorkedSec / 3600).toFixed(1);
             const mentalWasteCount = todos.filter(t => !t.completed && (t.postponeCount || 0) >= 3).length;
             
+            // Calcul du ratio moyen réel / prévisionnel global pour les tâches travaillées ou finies
+            const workedTasks = todos.filter(t => t.worked > 0 || t.completed);
+            let avgRatioText = '--%';
+            if (workedTasks.length > 0) {
+                const totalEstHrs = workedTasks.reduce((acc, t) => acc + (parseFloat(t.estimate) || 0), 0);
+                const totalWorkedHrsForWorked = workedTasks.reduce((acc, t) => acc + ((parseFloat(t.worked) || 0) / 3600), 0);
+                if (totalEstHrs > 0) {
+                    avgRatioText = `${Math.round((totalWorkedHrsForWorked / totalEstHrs) * 100)}%`;
+                }
+            }
+            
             const metricsHtml = `
                 <div style="background: var(--rem); border: 1px solid var(--border); padding: 4px; border-radius: 6px; text-align: center;">
                     <div style="font-size: 8px; color: var(--muted); text-transform: uppercase;">Réalisées</div>
-                    <div style="font-size: 12px; font-weight: bold; color: var(--p4);">${completed} / ${total}</div>
+                    <div style="font-size: 11px; font-weight: bold; color: var(--p4);">${completed} / ${total}</div>
                 </div>
                 <div style="background: var(--rem); border: 1px solid var(--border); padding: 4px; border-radius: 6px; text-align: center;">
                     <div style="font-size: 8px; color: var(--muted); text-transform: uppercase;">Temps Tâches</div>
-                    <div style="font-size: 12px; font-weight: bold; color: var(--chart-line);">${totalWorkedHrs}h</div>
+                    <div style="font-size: 11px; font-weight: bold; color: var(--chart-line);">${totalWorkedHrs}h</div>
                 </div>
                 <div style="background: var(--rem); border: 1px solid var(--border); padding: 4px; border-radius: 6px; text-align: center;">
-                    <div style="font-size: 8px; color: var(--muted); text-transform: uppercase;">Actives / Reportées</div>
-                    <div style="font-size: 12px; font-weight: bold; color: var(--p2);">${active} / ${postponed}</div>
+                    <div style="font-size: 8px; color: var(--muted); text-transform: uppercase;">Ratio Réal/Prévu</div>
+                    <div style="font-size: 11px; font-weight: bold; color: var(--p3);">${avgRatioText}</div>
                 </div>
                 <div style="background: var(--rem); border: 1px solid var(--border); padding: 4px; border-radius: 6px; text-align: center;">
                     <div style="font-size: 8px; color: var(--muted); text-transform: uppercase;">Déchets mentaux</div>
-                    <div style="font-size: 12px; font-weight: bold; color: var(--p1);">${mentalWasteCount}</div>
+                    <div style="font-size: 11px; font-weight: bold; color: var(--p1);">${mentalWasteCount}</div>
                 </div>
             `;
             document.getElementById('tasksMetricsGrid').innerHTML = metricsHtml;
@@ -1738,6 +1768,70 @@
                             text: 'Temps passé par priorité (heures)',
                             color: getThemeColor('--text'),
                             font: { size: 9, weight: 'bold' }
+                        }
+                    }
+                }
+            });
+
+            // Graphique 3 : Précision des estimations (derniers 7 jours)
+            const accuracyLabels = [];
+            const accuracyData = [];
+            
+            for (let i = 6; i >= 0; i--) {
+                const d = new Date();
+                d.setDate(d.getDate() - i);
+                const dateStr = getLocalYYYYMMDD(d);
+                accuracyLabels.push(d.toLocaleDateString([], { weekday: 'short', day: 'numeric' }));
+                
+                const dayCompleted = todos.filter(t => t.completed && t.completedDate === dateStr);
+                if (dayCompleted.length > 0) {
+                    const totalEst = dayCompleted.reduce((acc, t) => acc + (parseFloat(t.estimate) || 0), 0);
+                    const totalWorked = dayCompleted.reduce((acc, t) => acc + ((parseFloat(t.worked) || 0) / 3600), 0);
+                    if (totalEst > 0) {
+                        accuracyData.push(Math.round((totalWorked / totalEst) * 100));
+                    } else {
+                        accuracyData.push(100);
+                    }
+                } else {
+                    accuracyData.push(null);
+                }
+            }
+
+            const ctx3 = document.getElementById('taskAccuracyChart').getContext('2d');
+            taskAccuracyChart = new Chart(ctx3, {
+                type: 'line',
+                data: {
+                    labels: accuracyLabels,
+                    datasets: [{
+                        label: 'Ratio Réal/Prévu (%)',
+                        data: accuracyData,
+                        borderColor: getThemeColor('--chart-line'),
+                        backgroundColor: 'rgba(52, 152, 219, 0.1)',
+                        borderWidth: 2,
+                        tension: 0.3,
+                        spanGaps: true,
+                        fill: true
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false },
+                        title: {
+                            display: true,
+                            text: 'Évolution du Ratio Réal/Prévu (%)',
+                            color: getThemeColor('--text'),
+                            font: { size: 9, weight: 'bold' }
+                        }
+                    },
+                    scales: {
+                        x: { grid: { display: false }, ticks: { color: getThemeColor('--muted'), font: { size: 8 } } },
+                        y: { 
+                            grid: { color: getThemeColor('--border') }, 
+                            ticks: { color: getThemeColor('--muted'), font: { size: 8 } },
+                            suggestedMin: 50,
+                            suggestedMax: 150
                         }
                     }
                 }
