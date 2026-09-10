@@ -101,7 +101,12 @@
         /* Timer Section */
         .timer-row { display: flex; align-items: center; justify-content: space-between; width: 100%; }
         #timer { font-size: 34px; font-weight: bold; font-variant-numeric: tabular-nums; line-height: 1; }
-        #dayTotal { font-size: 18px; font-weight: bold; }
+        #dayTotal, #bouinageTotal { font-size: 18px; font-weight: bold; font-variant-numeric: tabular-nums; }
+        #bouinageTotal { color: #ff4d4d; }
+        .time-summary { display: flex; align-items: baseline; gap: 8px; margin-top: 2px; }
+        .time-summary-item { display: flex; align-items: baseline; gap: 3px; }
+        .time-summary-label { font-size: 8px; color: var(--muted); font-weight: bold; text-transform: uppercase; }
+        .time-summary-item.waste .time-summary-label { color: #ff4d4d; }
         #estimatedEnd { font-size: 10px; color: var(--muted); margin-top: 2px; font-style: italic; }
         
         /* Barre d'avancement */
@@ -303,8 +308,15 @@
                 <div style="font-size: 10px; color: var(--muted); display: flex; align-items: center; gap: 4px;">
                     OBJ : <input type="number" id="goalInput" min="1" max="24" value="7" class="theme-input" onchange="updateGoal(this.value)">H
                 </div>
-                <div style="display: flex; align-items: baseline; gap: 6px; margin-top: 2px;">
-                    <span id="dayTotal">00:00:00</span>
+                <div class="time-summary">
+                    <div class="time-summary-item" title="Temps passé concentré aujourd'hui">
+                        <span class="time-summary-label">Focus</span>
+                        <span id="dayTotal">00:00:00</span>
+                    </div>
+                    <div class="time-summary-item waste" title="Temps passé sans concentration aujourd'hui">
+                        <span class="time-summary-label">Bouinage</span>
+                        <span id="bouinageTotal">00:00:00</span>
+                    </div>
                     <span id="percText" style="font-size: 11px; color: var(--muted); font-weight: bold;">(0%)</span>
                 </div>
                 <div id="estimatedEnd">Fin estimée : --:--</div>
@@ -483,6 +495,13 @@
 
 <script>
     let timerInterval, startTime, elapsed = 0, isRunning = false, currentPriority = 4;
+    let wasteInterval = null, wasteLastTickAt = Date.now(), isWasteRunning = false;
+    let wasteByDay = {};
+    try {
+        const rawWaste = localStorage.getItem('focusWasteByDay');
+        wasteByDay = rawWaste ? JSON.parse(rawWaste) : {};
+        if (!wasteByDay || typeof wasteByDay !== 'object' || Array.isArray(wasteByDay)) wasteByDay = {};
+    } catch (e) { wasteByDay = {}; }
     let currentView = 'day', myChart = null, sCurveChart = null;
     let isStartHourManuallySet = false;
     let showCompletedTodos = localStorage.getItem('focusShowCompletedTodos') === 'true';
@@ -946,9 +965,67 @@
     }
 
     // --- TIMER ENGINE ---
+    function formatClock(totalSeconds) {
+        const safeSeconds = Math.max(0, Math.floor(totalSeconds));
+        const h = Math.floor(safeSeconds / 3600);
+        const m = Math.floor((safeSeconds % 3600) / 60);
+        const s = safeSeconds % 60;
+        return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+    }
+
+    function addWasteDuration(startMs, endMs) {
+        let cursor = startMs;
+        while (cursor < endMs) {
+            const cursorDate = new Date(cursor);
+            const nextMidnight = new Date(cursorDate);
+            nextMidnight.setHours(24, 0, 0, 0);
+            const segmentEnd = Math.min(endMs, nextMidnight.getTime());
+            const dayKey = getLocalYYYYMMDD(cursorDate);
+            wasteByDay[dayKey] = (parseFloat(wasteByDay[dayKey]) || 0) + (segmentEnd - cursor);
+            cursor = segmentEnd;
+        }
+    }
+
+    function syncWasteTimer() {
+        if (!isWasteRunning) return;
+        const now = Date.now();
+        const deltaMs = Math.max(0, now - wasteLastTickAt);
+        if (deltaMs > 0) {
+            addWasteDuration(wasteLastTickAt, now);
+            wasteLastTickAt = now;
+            localStorage.setItem('focusWasteByDay', JSON.stringify(wasteByDay));
+        }
+    }
+
+    function updateWasteDisplay() {
+        syncWasteTimer();
+        const todayWasteMs = parseFloat(wasteByDay[getLocalYYYYMMDD()]) || 0;
+        const wasteEl = document.getElementById('bouinageTotal');
+        if (wasteEl) wasteEl.textContent = formatClock(todayWasteMs / 1000);
+    }
+
+    function startWasteTimer() {
+        if (isWasteRunning) return;
+        isWasteRunning = true;
+        wasteLastTickAt = Date.now();
+        clearInterval(wasteInterval);
+        wasteInterval = setInterval(updateWasteDisplay, 1000);
+        updateWasteDisplay();
+    }
+
+    function stopWasteTimer() {
+        if (!isWasteRunning) return;
+        syncWasteTimer();
+        isWasteRunning = false;
+        clearInterval(wasteInterval);
+        wasteInterval = null;
+        updateWasteDisplay();
+    }
+
     function toggleTimer() {
         const btn = document.getElementById('startStopBtn');
         if (!isRunning) {
+            stopWasteTimer();
             startTime = Date.now() - elapsed;
             timerInterval = setInterval(updateDisplay, 1000);
             btn.textContent = "STOP"; btn.style.background = "#555"; isRunning = true;
@@ -966,6 +1043,7 @@
             
             elapsed = 0; updateDisplay(); btn.textContent = "START"; btn.style.background = `var(--p${currentPriority})`;
             renderTodos();
+            startWasteTimer();
         }
     }
 
@@ -973,6 +1051,7 @@
         if(isRunning) elapsed = Date.now() - startTime;
         const h = Math.floor(elapsed / 3600000), m = Math.floor((elapsed % 3600000) / 60000), s = Math.floor((elapsed % 60000) / 1000);
         document.getElementById('timer').textContent = `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+        updateWasteDisplay();
         updateDayStats();
         
         if (isRunning) {
@@ -1408,6 +1487,8 @@
     setPriority(4); 
     updateDisplay();
     renderTodos();
+    // En mode automatique, tout temps hors session de concentration est du bouinage.
+    startWasteTimer();
 
     // Initialiser le texte du bouton de masquage
     document.getElementById('toggleCompletedBtn').textContent = showCompletedTodos ? "Masquer terminées" : "Afficher terminées";
@@ -1441,6 +1522,7 @@
             focusDailyGoal: localStorage.getItem('focusDailyGoal'),
             focusStartHour: localStorage.getItem('focusStartHour'),
             focusRatio: localStorage.getItem('focusRatio'),
+            focusWasteByDay: localStorage.getItem('focusWasteByDay'),
             focusTodos: localStorage.getItem('focusTodos'),
             focusActiveTodoId: localStorage.getItem('focusActiveTodoId'),
             focusTheme: localStorage.getItem('focusTheme')
@@ -1881,43 +1963,4 @@
                 html += `
                     <div style="display:flex; flex-direction:column; background:${cardBg}; padding:8px; border-radius:6px; border:1px solid ${borderCol}; font-size:10px; gap:4px; text-align:left;">
                         <div style="display:flex; justify-content:space-between; align-items:center;">
-                            <div style="display:flex; flex-direction:column; overflow:hidden; gap:2px; flex-grow:1;">
-                                <span style="font-weight:bold; color:${textColor}; text-overflow:ellipsis; overflow:hidden; white-space:nowrap; max-width:180px;">
-                                    ${isWaste ? '⚠️ ' : ''}${t.text}
-                                </span>
-                                <span style="font-size:8px; color:var(--muted);">Reporté : ${t.postponeCount} fois ${t.postponedUntil ? `(jusqu'au ${t.postponedUntil})` : ''}</span>
-                            </div>
-                            <span class="session-priority" style="background:var(--p${t.priority})">P${t.priority}</span>
-                        </div>
-                        <div style="display:flex; gap:4px; justify-content:flex-end; margin-top:2px;">
-                            <button class="waste-action-btn" onclick="event.stopPropagation(); splitTodoAndRefresh('${t.id}')">✂️ Diviser</button>
-                            <button class="waste-action-btn" onclick="event.stopPropagation(); delegateTodoAndRefresh('${t.id}')">✏️ Modif/Déléguer</button>
-                            <button class="waste-action-btn" onclick="event.stopPropagation(); reactivateTodo('${t.id}')">⚡ Réactiver</button>
-                            <button class="waste-action-btn" onclick="event.stopPropagation(); deleteTodoAndRefreshPostponed('${t.id}')">🗑️ Jeter</button>
-                        </div>
-                    </div>
-                `;
-            });
-            html += '</div>';
-            postponedSec.innerHTML = html;
-        }
-    }
-
-    window.exportData = exportData;
-    window.importData = importData;
-    window.togglePostponedVisibility = togglePostponedVisibility;
-    window.updateTodoPostponeCountInline = updateTodoPostponeCountInline;
-    window.postponeTodo = postponeTodo;
-    window.splitTodo = splitTodo;
-    window.delegateTodo = delegateTodo;
-    window.setAnalysisTab = setAnalysisTab;
-    window.changeTaskView = changeTaskView;
-    window.deleteTodoAndRefreshHistory = deleteTodoAndRefreshHistory;
-    window.deleteTodoAndRefreshPostponed = deleteTodoAndRefreshPostponed;
-    window.splitTodoAndRefresh = splitTodoAndRefresh;
-    window.delegateTodoAndRefresh = delegateTodoAndRefresh;
-    window.reactivateTodo = reactivateTodo;
-
-</script>
-</body>
-</html>
+                            <div style="display:flex; flex-directi
