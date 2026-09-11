@@ -482,11 +482,17 @@
 </div>
 
 <script>
-    let timerInterval = null, startTime = null, elapsed = 0, isRunning = false, currentPriority = 4;
-    let bouinageInterval = null;
-    let bouinageAccumulated = parseFloat(localStorage.getItem('focusBouinageAccumulated_' + getLocalYYYYMMDD()) || '0');
-    let bouinageStartTime = localStorage.getItem('focusBouinageStartTime_' + getLocalYYYYMMDD()) ? parseInt(localStorage.getItem('focusBouinageStartTime_' + getLocalYYYYMMDD())) : null;
-    let hasStartedDay = localStorage.getItem('focusHasStartedDay_' + getLocalYYYYMMDD()) === 'true';
+    let timerInterval, startTime, elapsed = 0, isRunning = false, currentPriority = 4;
+    let bouinageAccumulated = 0;
+    let bouinageStartTime = null;
+    let hasStartedDay = false;
+    try {
+        const todayKey = getLocalYYYYMMDD();
+        hasStartedDay = localStorage.getItem('focusHasStartedDay_' + todayKey) === 'true';
+        bouinageAccumulated = parseFloat(localStorage.getItem('focusBouinageAcc_' + todayKey) || '0') || 0;
+        const rawStart = localStorage.getItem('focusBouinageStart_' + todayKey);
+        bouinageStartTime = rawStart ? parseInt(rawStart) : null;
+    } catch(e) {}
     let currentView = 'day', myChart = null, sCurveChart = null;
     let isStartHourManuallySet = false;
     let showCompletedTodos = localStorage.getItem('focusShowCompletedTodos') === 'true';
@@ -534,9 +540,9 @@
         activeTodoId = null;
     }
 
-    const goalInp = document.getElementById('goalInput'); if (goalInp) goalInp.value = dailyGoalHours;
-    const startHInp = document.getElementById('startHourInput'); if (startHInp) startHInp.value = dayStartHour;
-    const ratioInp = document.getElementById('ratioInput'); if (ratioInp) ratioInp.value = Math.round(concentrationRatio * 100);
+    const elGoal = document.getElementById('goalInput'); if (elGoal) elGoal.value = dailyGoalHours;
+    const elStartH = document.getElementById('startHourInput'); if (elStartH) elStartH.value = dayStartHour;
+    const elRatio = document.getElementById('ratioInput'); if (elRatio) elRatio.value = Math.round(concentrationRatio * 100);
 
     function parseSessionDate(dateInput) {
         if (!dateInput) return null;
@@ -556,12 +562,14 @@
     function getThemeColor(v) { return getComputedStyle(document.body).getPropertyValue(v).trim(); }
 
     function toggleTheme(isLight) {
-        document.body.classList.toggle('light-theme', !!isLight);
+        document.body.classList.toggle('light-theme', isLight);
         localStorage.setItem('focusTheme', isLight ? 'light' : 'dark');
         updateDayStats();
         setPriority(currentPriority);
-        const statsEl = document.getElementById('statsView');
-        if (statsEl && statsEl.style.display === 'flex') renderCharts();
+        try {
+            const sv = document.getElementById('statsView');
+            if (sv && sv.style.display === 'flex' && typeof renderCharts === 'function') renderCharts();
+        } catch(e) {}
     }
 
     function updateGoal(val) {
@@ -951,15 +959,15 @@
     }
 
     // --- TIMER & BOUINAGE ENGINE ---
-    function formatClock(sec) {
-        const s = Math.max(0, Math.floor(sec || 0));
+    function formatTimeHMS(totalSeconds) {
+        const s = Math.max(0, Math.floor(totalSeconds || 0));
         const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sc = s % 60;
         return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(sc).padStart(2,'0')}`;
     }
 
     function getBouinageSeconds() {
         let total = bouinageAccumulated;
-        if (bouinageStartTime && !isRunning) {
+        if (hasStartedDay && !isRunning && bouinageStartTime) {
             total += Math.max(0, (Date.now() - bouinageStartTime) / 1000);
         }
         return total;
@@ -967,78 +975,60 @@
 
     function updateBouinageDisplay() {
         const el = document.getElementById('bouinageTotal');
-        if (el) el.textContent = formatClock(getBouinageSeconds());
+        if (el) el.textContent = formatTimeHMS(getBouinageSeconds());
     }
 
-    function startBouinageTimer() {
-        const todayKey = getLocalYYYYMMDD();
-        hasStartedDay = true;
-        localStorage.setItem('focusHasStartedDay_' + todayKey, 'true');
-        if (!bouinageStartTime) {
-            bouinageStartTime = Date.now();
-            localStorage.setItem('focusBouinageStartTime_' + todayKey, String(bouinageStartTime));
-        }
-        if (!bouinageInterval) {
-            bouinageInterval = setInterval(updateBouinageDisplay, 1000);
-        }
-        updateBouinageDisplay();
-    }
-
-    function pauseBouinageTimer() {
-        const todayKey = getLocalYYYYMMDD();
-        if (bouinageStartTime) {
-            bouinageAccumulated += Math.max(0, (Date.now() - bouinageStartTime) / 1000);
-            bouinageStartTime = null;
-            localStorage.setItem('focusBouinageAccumulated_' + todayKey, String(bouinageAccumulated));
-            localStorage.removeItem('focusBouinageStartTime_' + todayKey);
-        }
-        if (bouinageInterval) {
-            clearInterval(bouinageInterval);
-            bouinageInterval = null;
-        }
-        updateBouinageDisplay();
+    function saveBouinageState() {
+        try {
+            const todayKey = getLocalYYYYMMDD();
+            localStorage.setItem('focusHasStartedDay_' + todayKey, hasStartedDay ? 'true' : 'false');
+            localStorage.setItem('focusBouinageAcc_' + todayKey, String(bouinageAccumulated));
+            if (bouinageStartTime && !isRunning) {
+                localStorage.setItem('focusBouinageStart_' + todayKey, String(bouinageStartTime));
+            } else {
+                localStorage.removeItem('focusBouinageStart_' + todayKey);
+            }
+        } catch(e) {}
     }
 
     function toggleTimer() {
         const btn = document.getElementById('startStopBtn');
-        const todayKey = getLocalYYYYMMDD();
         if (!isRunning) {
-            pauseBouinageTimer();
+            // Lancer la concentration
             hasStartedDay = true;
-            localStorage.setItem('focusHasStartedDay_' + todayKey, 'true');
-            
-            startTime = Date.now() - elapsed;
-            if (timerInterval) clearInterval(timerInterval);
-            timerInterval = setInterval(updateDisplay, 1000);
-            if (btn) {
-                btn.textContent = "STOP"; 
-                btn.style.background = "#555";
+            if (bouinageStartTime) {
+                bouinageAccumulated += Math.max(0, (Date.now() - bouinageStartTime) / 1000);
+                bouinageStartTime = null;
             }
+            saveBouinageState();
+            updateBouinageDisplay();
+
+            startTime = Date.now() - elapsed;
             isRunning = true;
+            if (btn) { btn.textContent = "STOP"; btn.style.background = "#555"; }
         } else {
-            if (timerInterval) clearInterval(timerInterval);
-            timerInterval = null;
+            // Mettre en pause la concentration -> le bouinage reprend
             isRunning = false;
-            
             let durationSec = elapsed / 1000;
             sessions.push({ date: Date.now(), duration: durationSec, priority: currentPriority, todoId: activeTodoId || null });
-            localStorage.setItem('focusSessions', JSON.stringify(sessions));
+            try { localStorage.setItem('focusSessions', JSON.stringify(sessions)); } catch(e) {}
             
             if (activeTodoId) {
                 const t = todos.find(t => t.id === activeTodoId);
-                if (t) t.worked = (parseFloat(t.worked) || 0) + durationSec;
-                localStorage.setItem('focusTodos', JSON.stringify(todos));
+                if (t) {
+                    t.worked = (parseFloat(t.worked) || 0) + durationSec;
+                    try { localStorage.setItem('focusTodos', JSON.stringify(todos)); } catch(e) {}
+                }
             }
             
             elapsed = 0; 
             updateDisplay(); 
-            if (btn) {
-                btn.textContent = "START"; 
-                btn.style.background = `var(--p${currentPriority})`;
-            }
+            if (btn) { btn.textContent = "START"; btn.style.background = `var(--p${currentPriority})`; }
             renderTodos();
-            
-            startBouinageTimer();
+
+            bouinageStartTime = Date.now();
+            saveBouinageState();
+            updateBouinageDisplay();
         }
     }
 
@@ -1046,7 +1036,6 @@
         if(isRunning) elapsed = Date.now() - startTime;
         const h = Math.floor(elapsed / 3600000), m = Math.floor((elapsed % 3600000) / 60000), s = Math.floor((elapsed % 60000) / 1000);
         document.getElementById('timer').textContent = `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
-        updateBouinageDisplay();
         updateDayStats();
         
         if (isRunning) {
@@ -1484,25 +1473,35 @@
     updateDisplay();
     renderTodos();
 
-    const toggleCompletedEl = document.getElementById('toggleCompletedBtn');
-    if (toggleCompletedEl) toggleCompletedEl.textContent = showCompletedTodos ? "Masquer terminées" : "Afficher terminées";
+    // Master loop: met à jour chaque seconde le focus quand il tourne, ou le bouinage quand il tourne
+    setInterval(() => {
+        if (isRunning) {
+            updateDisplay();
+        } else if (hasStartedDay) {
+            updateBouinageDisplay();
+        }
+    }, 1000);
+
+    // Initialiser l'état du bouinage
+    const todayInitKey = getLocalYYYYMMDD();
+    const hasTodaySessions = sessions.some(s => s && s.date && parseSessionDate(s.date) && getLocalYYYYMMDD(parseSessionDate(s.date)) === todayInitKey);
+    if (hasTodaySessions) hasStartedDay = true;
+    if (hasStartedDay && !isRunning && !bouinageStartTime) {
+        bouinageStartTime = Date.now();
+        saveBouinageState();
+    }
+    updateBouinageDisplay();
+
+    // Initialiser le texte du bouton de masquage
+    document.getElementById('toggleCompletedBtn').textContent = showCompletedTodos ? "Masquer terminées" : "Afficher terminées";
 
     const savedTheme = localStorage.getItem('focusTheme') || 'dark';
     const isLight = savedTheme === 'light';
-    const themeToggleEl = document.getElementById('themeToggle');
-    if (themeToggleEl) themeToggleEl.checked = isLight;
+    document.getElementById('themeToggle').checked = isLight;
     toggleTheme(isLight);
 
-    const togglePostponedEl = document.getElementById('togglePostponedBtn');
-    if (togglePostponedEl) togglePostponedEl.textContent = showPostponedTodos ? "Masquer" : "Reportées";
-
-    const todayInitKey = getLocalYYYYMMDD();
-    const hasTodaySessions = sessions.some(s => s && s.date && parseSessionDate(s.date) && getLocalYYYYMMDD(parseSessionDate(s.date)) === todayInitKey);
-    if (hasStartedDay || hasTodaySessions || bouinageStartTime || bouinageAccumulated > 0) {
-        startBouinageTimer();
-    } else {
-        updateBouinageDisplay();
-    }
+    // Initialisation texte bouton
+    document.getElementById('togglePostponedBtn').textContent = showPostponedTodos ? "Masquer" : "Reportées";
 
 
     // --- NOUVELLES FONCTIONS DE GESTION DE TÂCHES HISTORIQUES & REPORTS ---
@@ -1965,3 +1964,5 @@
                 
                 html += `
                     <div style="display:flex; flex-direction:column; background:${cardBg}; padding:8px; border-radius:6px; border:1px solid ${borderCol}; font-size:10px; gap:4px; text-align:left;">
+                        <div style="display:flex; justify-content:space-between; align-items:center;">
+                            <div style="displ
