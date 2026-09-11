@@ -534,9 +534,9 @@
         activeTodoId = null;
     }
 
-    document.getElementById('goalInput').value = dailyGoalHours;
-    document.getElementById('startHourInput').value = dayStartHour;
-    document.getElementById('ratioInput').value = Math.round(concentrationRatio * 100);
+    const goalInp = document.getElementById('goalInput'); if (goalInp) goalInp.value = dailyGoalHours;
+    const startHInp = document.getElementById('startHourInput'); if (startHInp) startHInp.value = dayStartHour;
+    const ratioInp = document.getElementById('ratioInput'); if (ratioInp) ratioInp.value = Math.round(concentrationRatio * 100);
 
     function parseSessionDate(dateInput) {
         if (!dateInput) return null;
@@ -556,11 +556,12 @@
     function getThemeColor(v) { return getComputedStyle(document.body).getPropertyValue(v).trim(); }
 
     function toggleTheme(isLight) {
-        document.body.classList.toggle('light-theme', isLight);
+        document.body.classList.toggle('light-theme', !!isLight);
         localStorage.setItem('focusTheme', isLight ? 'light' : 'dark');
         updateDayStats();
         setPriority(currentPriority);
-        if (document.getElementById('statsView').style.display === 'flex') renderCharts();
+        const statsEl = document.getElementById('statsView');
+        if (statsEl && statsEl.style.display === 'flex') renderCharts();
     }
 
     function updateGoal(val) {
@@ -1009,8 +1010,10 @@
             startTime = Date.now() - elapsed;
             if (timerInterval) clearInterval(timerInterval);
             timerInterval = setInterval(updateDisplay, 1000);
-            btn.textContent = "STOP"; 
-            btn.style.background = "#555"; 
+            if (btn) {
+                btn.textContent = "STOP"; 
+                btn.style.background = "#555";
+            }
             isRunning = true;
         } else {
             if (timerInterval) clearInterval(timerInterval);
@@ -1029,8 +1032,10 @@
             
             elapsed = 0; 
             updateDisplay(); 
-            btn.textContent = "START"; 
-            btn.style.background = `var(--p${currentPriority})`;
+            if (btn) {
+                btn.textContent = "START"; 
+                btn.style.background = `var(--p${currentPriority})`;
+            }
             renderTodos();
             
             startBouinageTimer();
@@ -1225,6 +1230,7 @@
     }
 
     function renderCharts() {
+        if (typeof Chart === 'undefined') return;
         if (myChart) myChart.destroy();
         if (sCurveChart) sCurveChart.destroy();
         
@@ -1477,8 +1483,19 @@
     setPriority(4); 
     updateDisplay();
     renderTodos();
-    
-    // Reprendre le bouinage si la journée a déjà commencé et que le chrono n'est pas actif
+
+    const toggleCompletedEl = document.getElementById('toggleCompletedBtn');
+    if (toggleCompletedEl) toggleCompletedEl.textContent = showCompletedTodos ? "Masquer terminées" : "Afficher terminées";
+
+    const savedTheme = localStorage.getItem('focusTheme') || 'dark';
+    const isLight = savedTheme === 'light';
+    const themeToggleEl = document.getElementById('themeToggle');
+    if (themeToggleEl) themeToggleEl.checked = isLight;
+    toggleTheme(isLight);
+
+    const togglePostponedEl = document.getElementById('togglePostponedBtn');
+    if (togglePostponedEl) togglePostponedEl.textContent = showPostponedTodos ? "Masquer" : "Reportées";
+
     const todayInitKey = getLocalYYYYMMDD();
     const hasTodaySessions = sessions.some(s => s && s.date && parseSessionDate(s.date) && getLocalYYYYMMDD(parseSessionDate(s.date)) === todayInitKey);
     if (hasStartedDay || hasTodaySessions || bouinageStartTime || bouinageAccumulated > 0) {
@@ -1486,17 +1503,6 @@
     } else {
         updateBouinageDisplay();
     }
-
-    // Initialiser le texte du bouton de masquage
-    document.getElementById('toggleCompletedBtn').textContent = showCompletedTodos ? "Masquer terminées" : "Afficher terminées";
-
-    const savedTheme = localStorage.getItem('focusTheme') || 'dark';
-    const isLight = savedTheme === 'light';
-    document.getElementById('themeToggle').checked = isLight;
-    toggleTheme(isLight);
-
-    // Initialisation texte bouton
-    document.getElementById('togglePostponedBtn').textContent = showPostponedTodos ? "Masquer" : "Reportées";
 
 
     // --- NOUVELLES FONCTIONS DE GESTION DE TÂCHES HISTORIQUES & REPORTS ---
@@ -1716,6 +1722,7 @@
     }
 
     function renderTaskView() {
+        if (typeof Chart === 'undefined') return;
         const statsSec = document.getElementById('tasksStatsSubSection');
         const historySec = document.getElementById('tasksHistorySubSection');
         const postponedSec = document.getElementById('tasksPostponedSubSection');
@@ -1958,6 +1965,4 @@
                 
                 html += `
                     <div style="display:flex; flex-direction:column; background:${cardBg}; padding:8px; border-radius:6px; border:1px solid ${borderCol}; font-size:10px; gap:4px; text-align:left;">
-                        <div style="display:flex; justify-content:space-between; align-items:center;">
-                            <div style="display:flex; flex-direction:column; overflow:hidden; gap:2px; flex-grow:1;">
-                                <span style="font-weight:bold; color:${textColor}; text-overflow:ellipsis; overflow:hidden; white-space:nowrap; max-width:180px;">
+   
