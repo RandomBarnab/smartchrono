@@ -291,13 +291,156 @@
             width: 24px;
             height: 16px;
         }
-    </style>
+    
+        /* --- MODAL SESSION / BILAN JOURNALIER --- */
+        .daily-modal-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.8);
+            backdrop-filter: blur(4px);
+            z-index: 1000;
+            display: none;
+            justify-content: center;
+            align-items: center;
+            padding: 10px;
+        }
+        body.light-theme .daily-modal-overlay {
+            background: rgba(255, 255, 255, 0.88);
+        }
+        .daily-modal-card {
+            background: var(--panel);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            width: 100%;
+            max-height: 96%;
+            display: flex;
+            flex-direction: column;
+            box-shadow: var(--shadow);
+            overflow: hidden;
+            animation: modalPop 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        @keyframes modalPop {
+            0% { transform: scale(0.95); opacity: 0; }
+            100% { transform: scale(1); opacity: 1; }
+        }
+        .daily-modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px 12px;
+            border-bottom: 1px solid var(--border);
+            background: rgba(0,0,0,0.12);
+        }
+        .daily-modal-title {
+            font-size: 12px;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .daily-modal-body {
+            padding: 10px 12px;
+            overflow-y: auto;
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            font-size: 11px;
+        }
+        .daily-modal-footer {
+            padding: 8px 12px;
+            border-top: 1px solid var(--border);
+            display: flex;
+            justify-content: flex-end;
+            gap: 6px;
+            background: rgba(0,0,0,0.06);
+        }
+        .daily-stat-badge {
+            background: var(--rem);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 6px;
+            text-align: center;
+            flex: 1;
+        }
+        .review-task-card {
+            background: var(--rem);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 6px 8px;
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+        .review-btn {
+            padding: 3px 6px;
+            border-radius: 4px;
+            font-size: 9px;
+            font-weight: bold;
+            cursor: pointer;
+            border: 1px solid var(--border);
+            background: var(--panel);
+            color: var(--text);
+            transition: 0.15s;
+        }
+        .review-btn:hover {
+            border-color: var(--chart-line);
+            color: var(--chart-line);
+        }
+        .review-btn.done-btn {
+            border-color: var(--p4);
+            color: var(--p4);
+        }
+        .review-btn.postpone-btn {
+            border-color: var(--p2);
+            color: var(--p2);
+        }
+        .review-btn.kill-btn {
+            border-color: var(--p1);
+            color: var(--p1);
+        }
+        .session-top-bar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 9px;
+            padding-bottom: 4px;
+            margin-bottom: 2px;
+            border-bottom: 1px solid var(--border);
+            color: var(--muted);
+        }
+        .session-pill-btn {
+            background: transparent;
+            border: 1px solid var(--border);
+            color: var(--text);
+            padding: 2px 6px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 9px;
+            font-weight: bold;
+            transition: all 0.2s;
+        }
+        .session-pill-btn:hover {
+            border-color: var(--chart-line);
+            color: var(--chart-line);
+        }
+</style>
 </head>
 <body>
 
 <div class="app-container">
     <!-- VUE PRINCIPALE -->
     <div id="mainView">
+        <div class="session-top-bar">
+            <span id="sessionStatusLabel" style="font-weight:bold; display:flex; align-items:center; gap:3px;">☀️ <span id="sessionDayText">Session du jour</span></span>
+            <div style="display:flex; gap:4px;">
+                <button onclick="openDailyReview('closing')" class="session-pill-btn" title="Bilan et clôture de la journée">🏁 Bilan</button>
+                <button onclick="openDailyReview('opening', true)" class="session-pill-btn" title="Démarrer / cadrer une nouvelle journée">🔄 Session</button>
+            </div>
+        </div>
         <div class="timer-row">
             <div>
                 <div style="font-size: 10px; color: var(--muted); display: flex; align-items: center; gap: 4px;">
@@ -480,6 +623,23 @@
     </div>
 </div>
 </div>
+
+
+    <!-- MODAL DE SESSION / BILAN JOURNALIER -->
+    <div id="dailyModalOverlay" class="daily-modal-overlay">
+        <div class="daily-modal-card">
+            <div class="daily-modal-header">
+                <div class="daily-modal-title" id="dailyModalTitle">🌅 Session du Jour</div>
+                <button onclick="closeDailyModal()" style="background:none; border:none; color:var(--text); cursor:pointer; font-size:14px; font-weight:bold;">✕</button>
+            </div>
+            <div class="daily-modal-body" id="dailyModalBody">
+                <!-- Contenu dynamique injecté par JS -->
+            </div>
+            <div class="daily-modal-footer" id="dailyModalFooter">
+                <button class="action" style="padding:4px 10px; font-size:10px; width:auto;" onclick="closeDailyModal()">Fermer</button>
+            </div>
+        </div>
+    </div>
 
 <script>
     let timerInterval, startTime, elapsed = 0, isRunning = false, currentPriority = 4;
@@ -1491,6 +1651,7 @@
         saveBouinageState();
     }
     updateBouinageDisplay();
+    checkDailyTransitions();
 
     // Initialiser le texte du bouton de masquage
     document.getElementById('toggleCompletedBtn').textContent = showCompletedTodos ? "Masquer terminées" : "Afficher terminées";
@@ -2001,6 +2162,238 @@
     window.splitTodoAndRefresh = splitTodoAndRefresh;
     window.delegateTodoAndRefresh = delegateTodoAndRefresh;
     window.reactivateTodo = reactivateTodo;
+
+    // --- GESTION DES SESSIONS JOURNALIÈRES & BILANS ---
+    let currentModalType = null;
+
+    function getYesterdayDateStr() {
+        const d = new Date();
+        d.setDate(d.getDate() - 1);
+        return getLocalYYYYMMDD(d);
+    }
+
+    function checkDailyTransitions() {
+        const today = getLocalYYYYMMDD();
+        const lastKnownDate = localStorage.getItem('focusLastActiveDate');
+        const lastClosedDate = localStorage.getItem('focusLastClosedDate');
+
+        // Cas 1 : Premier lancement absolu
+        if (!lastKnownDate) {
+            localStorage.setItem('focusLastActiveDate', today);
+            openDailyReview('opening');
+            return;
+        }
+
+        // Cas 2 : Changement de jour
+        if (lastKnownDate !== today) {
+            // Si la journée précédente n'a pas été clôturée, on lance le rattrapage de la veille !
+            if (lastClosedDate !== lastKnownDate) {
+                openDailyReview('catchup', false, lastKnownDate);
+            } else {
+                openDailyReview('opening');
+            }
+            localStorage.setItem('focusLastActiveDate', today);
+        }
+    }
+
+    function openDailyReview(type, forceOpen = false, targetDate = null) {
+        currentModalType = type;
+        const modal = document.getElementById('dailyModalOverlay');
+        const titleEl = document.getElementById('dailyModalTitle');
+        const bodyEl = document.getElementById('dailyModalBody');
+        const footerEl = document.getElementById('dailyModalFooter');
+        if (!modal) return;
+
+        const today = getLocalYYYYMMDD();
+        const dateToReview = targetDate || today;
+
+        if (type === 'catchup') {
+            titleEl.innerHTML = `⚠️ Point sur la veille (${dateToReview})`;
+        } else if (type === 'closing') {
+            titleEl.innerHTML = `🏁 Bilan & Clôture de la journée`;
+        } else {
+            titleEl.innerHTML = `🌅 Ouverture de la journée (${today})`;
+        }
+
+        renderDailyModalContent(type, dateToReview);
+        modal.style.display = 'flex';
+    }
+
+    function closeDailyModal() {
+        const modal = document.getElementById('dailyModalOverlay');
+        if (modal) modal.style.display = 'none';
+        renderTodos();
+        updateDayStats();
+    }
+
+    function renderDailyModalContent(type, targetDate) {
+        const bodyEl = document.getElementById('dailyModalBody');
+        const footerEl = document.getElementById('dailyModalFooter');
+        if (!bodyEl) return;
+
+        const today = getLocalYYYYMMDD();
+        const dailySessions = sessions.filter(s => s && s.date && getLocalYYYYMMDD(parseSessionDate(s.date)) === targetDate);
+        const totalFocusSec = dailySessions.reduce((acc, s) => acc + (parseFloat(s.duration) || 0), 0) + ((isRunning && targetDate === today) ? elapsed/1000 : 0);
+        const focusH = (totalFocusSec / 3600).toFixed(1);
+        
+        let wasteSec = 0;
+        if (targetDate === today) {
+            wasteSec = getBouinageSeconds();
+        }
+        const wasteH = (wasteSec / 3600).toFixed(1);
+
+        // Tâches actives non terminées
+        const uncompletedTodos = todos.filter(t => !t.completed);
+        const completedToday = todos.filter(t => t.completed && t.completedDate === targetDate);
+
+        let html = '';
+
+        // 1. Stats récapitulatives
+        html += `
+            <div style="display:flex; gap:6px;">
+                <div class="daily-stat-badge">
+                    <div style="font-size:8px; color:var(--muted); text-transform:uppercase;">Focus</div>
+                    <div style="font-size:13px; font-weight:bold; color:var(--p4);">${focusH}h</div>
+                </div>
+                <div class="daily-stat-badge">
+                    <div style="font-size:8px; color:var(--muted); text-transform:uppercase;">Bouinage</div>
+                    <div style="font-size:13px; font-weight:bold; color:#ff4d4d;">${wasteH}h</div>
+                </div>
+                <div class="daily-stat-badge">
+                    <div style="font-size:8px; color:var(--muted); text-transform:uppercase;">Terminées</div>
+                    <div style="font-size:13px; font-weight:bold; color:var(--chart-line);">${completedToday.length}</div>
+                </div>
+            </div>
+        `;
+
+        if (type === 'opening') {
+            html += `
+                <div style="background:rgba(52,152,219,0.1); border:1px solid var(--chart-line); border-radius:6px; padding:8px; font-size:10px;">
+                    🎯 <b>Objectif du jour</b> : Définissez vos priorités et vos estimations avant de lancer votre premier chrono.
+                </div>
+                <div style="font-weight:bold; font-size:11px; margin-top:4px;">Tâches prêtes pour aujourd'hui (${uncompletedTodos.length}) :</div>
+            `;
+            if (uncompletedTodos.length === 0) {
+                html += `<div style="color:var(--muted); font-style:italic; text-align:center; padding:8px;">Aucune tâche en cours. Ajoutez-en une dans la To-Do !</div>`;
+            } else {
+                uncompletedTodos.forEach(t => {
+                    html += `
+                        <div class="review-task-card">
+                            <div style="display:flex; justify-content:space-between; align-items:center;">
+                                <span style="font-weight:bold;">${t.text}</span>
+                                <span class="session-priority" style="background:var(--p${t.priority})">P${t.priority}</span>
+                            </div>
+                            <div style="display:flex; justify-content:space-between; align-items:center; font-size:9px; color:var(--muted);">
+                                <span>Est: ${formatHoursMinutes(t.estimate)} | Fait: ${formatTaskWorked(t.worked)}</span>
+                                <div style="display:flex; gap:3px;">
+                                    <button class="review-btn done-btn" onclick="markTaskDoneInReview('${t.id}')">✓ Fait</button>
+                                    <button class="review-btn postpone-btn" onclick="postponeTaskInReview('${t.id}')">⏭️ Demain</button>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                });
+            }
+
+            footerEl.innerHTML = `
+                <button class="action" style="padding:6px 14px; font-size:11px; background:var(--p4); color:var(--bg); border:none; width:auto;" onclick="validateOpeningSession()">🚀 C'est parti !</button>
+            `;
+        } else {
+            // Type 'closing' ou 'catchup'
+            const msg = (type === 'catchup') 
+                ? "Vous n'avez pas clôturé la journée précédente. Que fait-on des tâches restantes ?" 
+                : "Faisons le point sur les tâches : validez ce qui est fait, repoussez à demain ou éliminez le superflu.";
+            
+            html += `
+                <div style="background:rgba(241,196,15,0.1); border:1px solid var(--p3); border-radius:6px; padding:8px; font-size:10px;">
+                    📋 ${msg}
+                </div>
+                <div style="font-weight:bold; font-size:11px; margin-top:4px;">Tâches restantes à arbitrer :</div>
+            `;
+
+            if (uncompletedTodos.length === 0) {
+                html += `<div style="color:var(--p4); font-weight:bold; text-align:center; padding:10px;">🎉 Bravo ! Toutes vos tâches sont terminées !</div>`;
+            } else {
+                uncompletedTodos.forEach(t => {
+                    const isWaste = t.postponeCount >= 2;
+                    html += `
+                        <div class="review-task-card" style="${isWaste ? 'border-color:#ff4d4d; background:rgba(255,77,77,0.05);' : ''}">
+                            <div style="display:flex; justify-content:space-between; align-items:center;">
+                                <span style="font-weight:bold; ${isWaste ? 'color:#ff4d4d;' : ''}">
+                                    ${isWaste ? '⚠️ ' : ''}${t.text}
+                                </span>
+                                <span style="font-size:9px; color:var(--muted);">Reporté ${t.postponeCount}x</span>
+                            </div>
+                            <div style="display:flex; justify-content:space-between; align-items:center; margin-top:3px;">
+                                <span style="font-size:9px; color:var(--muted);">⏱️ Fait: ${formatTaskWorked(t.worked)} / ${formatHoursMinutes(t.estimate)}</span>
+                                <div style="display:flex; gap:3px;">
+                                    <button class="review-btn done-btn" onclick="markTaskDoneInReview('${t.id}')">✓ Fait</button>
+                                    <button class="review-btn postpone-btn" onclick="postponeTaskInReview('${t.id}')">⏭️ Reporter</button>
+                                    <button class="review-btn kill-btn" onclick="killTaskInReview('${t.id}')">🗑️ Tuer</button>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                });
+            }
+
+            footerEl.innerHTML = `
+                <button class="action" style="padding:6px 14px; font-size:11px; background:var(--p4); color:var(--bg); border:none; width:auto;" onclick="validateClosingSession('${targetDate}')">
+                    ${type === 'catchup' ? 'Valider et ouvrir la journee' : 'Valider & Cloturer'}
+                </button>
+            `;
+        }
+    }
+
+    function markTaskDoneInReview(id) {
+        const t = todos.find(item => item.id === id);
+        if (t) {
+            t.completed = true;
+            t.completedDate = getLocalYYYYMMDD();
+            localStorage.setItem('focusTodos', JSON.stringify(todos));
+            renderDailyModalContent(currentModalType, getLocalYYYYMMDD());
+        }
+    }
+
+    function postponeTaskInReview(id) {
+        const t = todos.find(item => item.id === id);
+        if (t) {
+            t.postponeCount = (t.postponeCount || 0) + 1;
+            t.postponedUntil = getTomorrowDateStr();
+            localStorage.setItem('focusTodos', JSON.stringify(todos));
+            renderDailyModalContent(currentModalType, getLocalYYYYMMDD());
+        }
+    }
+
+    function killTaskInReview(id) {
+        todos = todos.filter(item => item.id !== id);
+        if (activeTodoId === id) activeTodoId = null;
+        localStorage.setItem('focusTodos', JSON.stringify(todos));
+        localStorage.setItem('focusActiveTodoId', activeTodoId);
+        renderDailyModalContent(currentModalType, getLocalYYYYMMDD());
+    }
+
+    function validateOpeningSession() {
+        localStorage.setItem('focusLastOpenedDate', getLocalYYYYMMDD());
+        closeDailyModal();
+    }
+
+    function validateClosingSession(targetDate) {
+        localStorage.setItem('focusLastClosedDate', targetDate);
+        closeDailyModal();
+        if (currentModalType === 'catchup') {
+            openDailyReview('opening');
+        }
+    }
+
+    window.openDailyReview = openDailyReview;
+    window.closeDailyModal = closeDailyModal;
+    window.markTaskDoneInReview = markTaskDoneInReview;
+    window.postponeTaskInReview = postponeTaskInReview;
+    window.killTaskInReview = killTaskInReview;
+    window.validateOpeningSession = validateOpeningSession;
+    window.validateClosingSession = validateClosingSession;
+
 
 </script>
 </body>
