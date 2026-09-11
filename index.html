@@ -483,19 +483,10 @@
 
 <script>
     let timerInterval = null, startTime = null, elapsed = 0, isRunning = false, currentPriority = 4;
-    let wasteInterval = null;
-    let wasteState = { hasStartedDay: false, isWasteRunning: false, wasteStartTime: null, accumulatedSec: 0, lastDateStr: getLocalYYYYMMDD() };
-    try {
-        const rawW = localStorage.getItem('focusWasteState');
-        if (rawW) {
-            const parsed = JSON.parse(rawW);
-            if (parsed && typeof parsed === 'object') {
-                if (parsed.lastDateStr === getLocalYYYYMMDD()) {
-                    wasteState = Object.assign(wasteState, parsed);
-                }
-            }
-        }
-    } catch(e) {}
+    let bouinageInterval = null;
+    let bouinageAccumulated = parseFloat(localStorage.getItem('focusBouinageAccumulated_' + getLocalYYYYMMDD()) || '0');
+    let bouinageStartTime = localStorage.getItem('focusBouinageStartTime_' + getLocalYYYYMMDD()) ? parseInt(localStorage.getItem('focusBouinageStartTime_' + getLocalYYYYMMDD())) : null;
+    let hasStartedDay = localStorage.getItem('focusHasStartedDay_' + getLocalYYYYMMDD()) === 'true';
     let currentView = 'day', myChart = null, sCurveChart = null;
     let isStartHourManuallySet = false;
     let showCompletedTodos = localStorage.getItem('focusShowCompletedTodos') === 'true';
@@ -543,9 +534,9 @@
         activeTodoId = null;
     }
 
-    const goalInp = document.getElementById('goalInput'); if (goalInp) goalInp.value = dailyGoalHours;
-    const startHInp = document.getElementById('startHourInput'); if (startHInp) startHInp.value = dayStartHour;
-    const ratioInp = document.getElementById('ratioInput'); if (ratioInp) ratioInp.value = Math.round(concentrationRatio * 100);
+    document.getElementById('goalInput').value = dailyGoalHours;
+    document.getElementById('startHourInput').value = dayStartHour;
+    document.getElementById('ratioInput').value = Math.round(concentrationRatio * 100);
 
     function parseSessionDate(dateInput) {
         if (!dateInput) return null;
@@ -959,72 +950,61 @@
     }
 
     // --- TIMER & BOUINAGE ENGINE ---
-    function formatHMS(sec) {
+    function formatClock(sec) {
         const s = Math.max(0, Math.floor(sec || 0));
         const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sc = s % 60;
         return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(sc).padStart(2,'0')}`;
     }
 
-    function checkDayReset() {
-        const today = getLocalYYYYMMDD();
-        if (wasteState.lastDateStr !== today) {
-            wasteState = { hasStartedDay: false, isWasteRunning: false, wasteStartTime: null, accumulatedSec: 0, lastDateStr: today };
-            localStorage.setItem('focusWasteState', JSON.stringify(wasteState));
-        }
-    }
-
-    function getLiveBouinageSeconds() {
-        checkDayReset();
-        if (!wasteState.hasStartedDay) return 0;
-        let total = parseFloat(wasteState.accumulatedSec) || 0;
-        if (wasteState.isWasteRunning && wasteState.wasteStartTime) {
-            total += Math.max(0, (Date.now() - wasteState.wasteStartTime) / 1000);
+    function getBouinageSeconds() {
+        let total = bouinageAccumulated;
+        if (bouinageStartTime && !isRunning) {
+            total += Math.max(0, (Date.now() - bouinageStartTime) / 1000);
         }
         return total;
     }
 
     function updateBouinageDisplay() {
         const el = document.getElementById('bouinageTotal');
-        if (el) el.textContent = formatHMS(getLiveBouinageSeconds());
+        if (el) el.textContent = formatClock(getBouinageSeconds());
     }
 
-    function startBouinage() {
-        checkDayReset();
-        wasteState.hasStartedDay = true;
-        if (!wasteState.isWasteRunning) {
-            wasteState.isWasteRunning = true;
-            wasteState.wasteStartTime = Date.now();
-            localStorage.setItem('focusWasteState', JSON.stringify(wasteState));
+    function startBouinageTimer() {
+        const todayKey = getLocalYYYYMMDD();
+        hasStartedDay = true;
+        localStorage.setItem('focusHasStartedDay_' + todayKey, 'true');
+        if (!bouinageStartTime) {
+            bouinageStartTime = Date.now();
+            localStorage.setItem('focusBouinageStartTime_' + todayKey, String(bouinageStartTime));
         }
-        if (!wasteInterval) {
-            wasteInterval = setInterval(updateBouinageDisplay, 1000);
+        if (!bouinageInterval) {
+            bouinageInterval = setInterval(updateBouinageDisplay, 1000);
         }
         updateBouinageDisplay();
     }
 
-    function pauseBouinage() {
-        checkDayReset();
-        if (wasteState.isWasteRunning && wasteState.wasteStartTime) {
-            const added = Math.max(0, (Date.now() - wasteState.wasteStartTime) / 1000);
-            wasteState.accumulatedSec = (parseFloat(wasteState.accumulatedSec) || 0) + added;
-            wasteState.isWasteRunning = false;
-            wasteState.wasteStartTime = null;
-            localStorage.setItem('focusWasteState', JSON.stringify(wasteState));
+    function pauseBouinageTimer() {
+        const todayKey = getLocalYYYYMMDD();
+        if (bouinageStartTime) {
+            bouinageAccumulated += Math.max(0, (Date.now() - bouinageStartTime) / 1000);
+            bouinageStartTime = null;
+            localStorage.setItem('focusBouinageAccumulated_' + todayKey, String(bouinageAccumulated));
+            localStorage.removeItem('focusBouinageStartTime_' + todayKey);
         }
-        if (wasteInterval) {
-            clearInterval(wasteInterval);
-            wasteInterval = null;
+        if (bouinageInterval) {
+            clearInterval(bouinageInterval);
+            bouinageInterval = null;
         }
         updateBouinageDisplay();
     }
 
     function toggleTimer() {
         const btn = document.getElementById('startStopBtn');
+        const todayKey = getLocalYYYYMMDD();
         if (!isRunning) {
-            // Démarrage de la concentration : pause du bouinage
-            pauseBouinage();
-            wasteState.hasStartedDay = true;
-            localStorage.setItem('focusWasteState', JSON.stringify(wasteState));
+            pauseBouinageTimer();
+            hasStartedDay = true;
+            localStorage.setItem('focusHasStartedDay_' + todayKey, 'true');
             
             startTime = Date.now() - elapsed;
             if (timerInterval) clearInterval(timerInterval);
@@ -1033,8 +1013,7 @@
             btn.style.background = "#555"; 
             isRunning = true;
         } else {
-            // Arrêt de la concentration : enregistrement de la session et lancement du bouinage
-            if (timerInterval) clearInterval(timerInterval); 
+            if (timerInterval) clearInterval(timerInterval);
             timerInterval = null;
             isRunning = false;
             
@@ -1054,8 +1033,7 @@
             btn.style.background = `var(--p${currentPriority})`;
             renderTodos();
             
-            // Le bouinage s'active automatiquement
-            startBouinage();
+            startBouinageTimer();
         }
     }
 
@@ -1499,29 +1477,26 @@
     setPriority(4); 
     updateDisplay();
     renderTodos();
-
-    // Initialiser le texte du bouton de masquage
-    const toggleCompletedEl = document.getElementById('toggleCompletedBtn');
-    if (toggleCompletedEl) toggleCompletedEl.textContent = showCompletedTodos ? "Masquer terminées" : "Afficher terminées";
-
-    const savedTheme = localStorage.getItem('focusTheme') || 'dark';
-    const isLight = savedTheme === 'light';
-    const themeToggleEl = document.getElementById('themeToggle');
-    if (themeToggleEl) themeToggleEl.checked = isLight;
-    toggleTheme(isLight);
-
-    // Initialisation texte bouton
-    const togglePostponedEl = document.getElementById('togglePostponedBtn');
-    if (togglePostponedEl) togglePostponedEl.textContent = showPostponedTodos ? "Masquer" : "Reportées";
-
-    // Gestion du démarrage du bouinage si la journée a déjà commencé
-    const todayKey = getLocalYYYYMMDD();
-    const hasTodaySessions = sessions.some(s => s && s.date && parseSessionDate(s.date) && getLocalYYYYMMDD(parseSessionDate(s.date)) === todayKey);
-    if (wasteState.hasStartedDay || hasTodaySessions) {
-        startBouinage();
+    
+    // Reprendre le bouinage si la journée a déjà commencé et que le chrono n'est pas actif
+    const todayInitKey = getLocalYYYYMMDD();
+    const hasTodaySessions = sessions.some(s => s && s.date && parseSessionDate(s.date) && getLocalYYYYMMDD(parseSessionDate(s.date)) === todayInitKey);
+    if (hasStartedDay || hasTodaySessions || bouinageStartTime || bouinageAccumulated > 0) {
+        startBouinageTimer();
     } else {
         updateBouinageDisplay();
     }
+
+    // Initialiser le texte du bouton de masquage
+    document.getElementById('toggleCompletedBtn').textContent = showCompletedTodos ? "Masquer terminées" : "Afficher terminées";
+
+    const savedTheme = localStorage.getItem('focusTheme') || 'dark';
+    const isLight = savedTheme === 'light';
+    document.getElementById('themeToggle').checked = isLight;
+    toggleTheme(isLight);
+
+    // Initialisation texte bouton
+    document.getElementById('togglePostponedBtn').textContent = showPostponedTodos ? "Masquer" : "Reportées";
 
 
     // --- NOUVELLES FONCTIONS DE GESTION DE TÂCHES HISTORIQUES & REPORTS ---
@@ -1974,4 +1949,15 @@
                 return;
             }
             
-            let html = '<div style
+            let html = '<div style="display:flex; flex-direction:column; gap:4px; width:100%;">';
+            postponedTodos.forEach(t => {
+                const isWaste = t.postponeCount >= 3;
+                const cardBg = isWaste ? 'linear-gradient(135deg, #2c1a1a 0%, #1e1e1e 100%)' : 'var(--rem)';
+                const borderCol = isWaste ? '#ff4d4d' : 'var(--border)';
+                const textColor = isWaste ? '#ff4d4d' : 'var(--text)';
+                
+                html += `
+                    <div style="display:flex; flex-direction:column; background:${cardBg}; padding:8px; border-radius:6px; border:1px solid ${borderCol}; font-size:10px; gap:4px; text-align:left;">
+                        <div style="display:flex; justify-content:space-between; align-items:center;">
+                            <div style="display:flex; flex-direction:column; overflow:hidden; gap:2px; flex-grow:1;">
+                                <span style="font-weight:bold; color:${textColor}; text-overflow:ellipsis; overflow:hidden; white-space:nowrap; max-width:180px;">
