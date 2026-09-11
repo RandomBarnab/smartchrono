@@ -1965,4 +1965,43 @@
                 html += `
                     <div style="display:flex; flex-direction:column; background:${cardBg}; padding:8px; border-radius:6px; border:1px solid ${borderCol}; font-size:10px; gap:4px; text-align:left;">
                         <div style="display:flex; justify-content:space-between; align-items:center;">
-                            <div style="displ
+                            <div style="display:flex; flex-direction:column; overflow:hidden; gap:2px; flex-grow:1;">
+                                <span style="font-weight:bold; color:${textColor}; text-overflow:ellipsis; overflow:hidden; white-space:nowrap; max-width:180px;">
+                                    ${isWaste ? '⚠️ ' : ''}${t.text}
+                                </span>
+                                <span style="font-size:8px; color:var(--muted);">Reporté : ${t.postponeCount} fois ${t.postponedUntil ? `(jusqu'au ${t.postponedUntil})` : ''}</span>
+                            </div>
+                            <span class="session-priority" style="background:var(--p${t.priority})">P${t.priority}</span>
+                        </div>
+                        <div style="display:flex; gap:4px; justify-content:flex-end; margin-top:2px;">
+                            <button class="waste-action-btn" onclick="event.stopPropagation(); splitTodoAndRefresh('${t.id}')">✂️ Diviser</button>
+                            <button class="waste-action-btn" onclick="event.stopPropagation(); delegateTodoAndRefresh('${t.id}')">✏️ Modif/Déléguer</button>
+                            <button class="waste-action-btn" onclick="event.stopPropagation(); reactivateTodo('${t.id}')">⚡ Réactiver</button>
+                            <button class="waste-action-btn" onclick="event.stopPropagation(); deleteTodoAndRefreshPostponed('${t.id}')">🗑️ Jeter</button>
+                        </div>
+                    </div>
+                `;
+            });
+            html += '</div>';
+            postponedSec.innerHTML = html;
+        }
+    }
+
+    window.exportData = exportData;
+    window.importData = importData;
+    window.togglePostponedVisibility = togglePostponedVisibility;
+    window.updateTodoPostponeCountInline = updateTodoPostponeCountInline;
+    window.postponeTodo = postponeTodo;
+    window.splitTodo = splitTodo;
+    window.delegateTodo = delegateTodo;
+    window.setAnalysisTab = setAnalysisTab;
+    window.changeTaskView = changeTaskView;
+    window.deleteTodoAndRefreshHistory = deleteTodoAndRefreshHistory;
+    window.deleteTodoAndRefreshPostponed = deleteTodoAndRefreshPostponed;
+    window.splitTodoAndRefresh = splitTodoAndRefresh;
+    window.delegateTodoAndRefresh = delegateTodoAndRefresh;
+    window.reactivateTodo = reactivateTodo;
+
+</script>
+</body>
+</html>
